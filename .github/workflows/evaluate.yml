@@ -3,6 +3,7 @@ on: [workflow_dispatch]
 jobs:
   eval-24h:
     runs-on: self-hosted
+    timeout-minutes: 1500
     strategy:
       matrix:
         evalTarget: [ 'edu.berkeley.cs.jqf.examples.bcel.ParserTest', 'edu.berkeley.cs.jqf.examples.closure.CompilerTest', 'edu.berkeley.cs.jqf.examples.ant.ProjectBuilderTest',
