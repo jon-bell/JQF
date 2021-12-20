@@ -1,0 +1,8 @@
+name: Smoke test evaluation - 10 minutes, 5 trials
+on: [push, pull_request]
+jobs:
+  evaluate:
+    uses: jon-bell/jqf/.github/workflows/evaluation-workflow.yml@reporting-ci
+    with:
+      duration: 10m
+      trials: 5
