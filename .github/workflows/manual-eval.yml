@@ -1,0 +1,18 @@
+name: Manually triggered evaluation
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: "Duration of fuzzing campaign, e.g. 3h or 24h or 5m"
+        required: true
+        default: "10m"
+      trials:
+        description: "Number of repeated trials to perform for each fuzzing target"
+        required: true
+        default: 5
+jobs:
+  evaluate:
+    uses: jon-bell/jqf/.github/workflows/evaluation-workflow.yml@reporting-ci
+    with:
+      duration: ${{ github.event.inputs.duration }}
+      trials: ${{ github.events.inputs.trials }}
