@@ -34,7 +34,7 @@ jobs:
     env:
       JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64/
       RESULTS_DIR: /ci-logs/public/${{ github.repository }}/${{ github.sha }}/${{ github.workflow }}/${{ github.run_id }}/${{ github.run_attempt }}/artifacts
-      JVM_OPTS: -Dtime=${{ inputs.duration }} -Djqf.ei.QUIET_MODE=true -DZEST_STATS_REFRESH_TIME_PERIOD=60000
+      JVM_OPTS: -Dtime=${{ inputs.duration }} -Djqf.ei.QUIET_MODE=true -DZEST_STATS_REFRESH_TIME_PERIOD=60000 -DuseFastNonCollidingCoverageInstrumentation=true
     strategy:
         matrix: ${{fromJson(needs.build-matrix.outputs.matrix-run)}}
     steps:
