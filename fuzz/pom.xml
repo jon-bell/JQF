@@ -50,6 +50,11 @@
             <artifactId>picocli</artifactId>
             <version>4.0.4</version>
         </dependency>
+        <dependency>
+            <groupId>org.eclipse.collections</groupId>
+            <artifactId>eclipse-collections</artifactId>
+            <version>10.4.0</version>
+        </dependency>
     </dependencies>
 
 
@@ -71,22 +76,22 @@
                     </archive>
                 </configuration>
             </plugin>
-            <plugin> 
-		        <groupId>org.apache.maven.plugins</groupId> 
+            <plugin>
+		        <groupId>org.apache.maven.plugins</groupId>
 		        <artifactId>maven-dependency-plugin</artifactId>
-		        <executions> 
-		                <execution> 
-		                        <id>copy-dependencies</id> 
+		        <executions>
+		                <execution>
+		                        <id>copy-dependencies</id>
 		                        <phase>package</phase>
-		                        <goals> 
-		                                <goal>copy-dependencies</goal> 
-		                        </goals> 
-		                        <configuration> 
-		                                <includeScope>runtime</includeScope> 
+		                        <goals>
+		                                <goal>copy-dependencies</goal>
+		                        </goals>
+		                        <configuration>
+		                                <includeScope>runtime</includeScope>
 		                                <excludeArtifactIds>jqf-instrument,asm</excludeArtifactIds>
-		                        </configuration> 
-		                </execution> 
-		        </executions> 
+		                        </configuration>
+		                </execution>
+		        </executions>
 			</plugin>
             <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
