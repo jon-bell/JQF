@@ -111,7 +111,7 @@ summaryCoverageTable <- byFile %>%
         left_join(jacoco,by="config") %>%
         mutate(
                 path=substring(path,nchar(params$baseDir)),
-                config=paste0("[",config,"](",params$artifactURL,"/",path,"/jacoco-",params$benchmark)) %>%
+                config=paste0("[",config,"](",params$artifactURL,"/",path,"/jacoco-",params$benchmark,")")) %>%
         rename(Configuration=config, Covered=branchesCovered,Total=branchesTotal)  %>%
         relocate(Covered,.before=Total) %>% select(-path)
 names(summaryCoverageTable) <- gsub("[.].+", "", names(summaryCoverageTable))
