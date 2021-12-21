@@ -11,8 +11,8 @@ public class GlobalStateForInstrumentation {
   // JQF's Fast Coverage implementation uses a plain int, no bit packing, no truncation errors
   private int fastCoverageIID = 0;
   public int incAndGetFastCoverageId(){
-    iid++;
-    return iid;
+    fastCoverageIID++;
+    return fastCoverageIID;
   }
 
 
