@@ -83,6 +83,21 @@ public class FastNonCollidingCounter extends Counter {
         return newVal;
     }
 
+    @Override
+    protected int incrementAtIndex(int index, int delta) {
+        throw new UnsupportedOperationException("This coverage is already non-colliding, please just use get");
+    }
+
+    @Override
+    public void setAtIndex(int idx, int value) {
+        throw new UnsupportedOperationException("This coverage is already non-colliding, please just use setAtIndex");
+    }
+
+    @Override
+    public int getAtIndex(int idx) {
+        throw new UnsupportedOperationException("This coverage is already non-colliding, please just use set");
+    }
+
     /**
      * Returns the number of indices with non-zero counts.
      *
@@ -100,6 +115,10 @@ public class FastNonCollidingCounter extends Counter {
      */
     public synchronized IntList getNonZeroKeys() {
         return this.nonZeroKeys;
+    }
+
+    public IntList getNonZeroIndices(){
+        return this.getNonZeroKeys();
     }
 
     /**
