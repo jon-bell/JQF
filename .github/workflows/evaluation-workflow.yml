@@ -12,6 +12,11 @@ on:
         required: false
         default: 5m
         type: string
+      report_on_branches:
+        description: Other branches to include in the report
+        required: false
+        default: fast-collision-free-coverage,reporting-ci
+        type: string
 jobs:
   build-matrix:
     runs-on: self-hosted
@@ -114,23 +119,25 @@ jobs:
           done
           JACOCO_SUMMARY+='"site_url":"$BASE_URL"}'
           echo "::set-output name=jacoco-summary::$JACOCO_SUMMARY"
-      - name: Build Site
-        run: |
-          pip install python-frontmatter
-          python3 scripts/experiments/buildSite.py "$THIS_REV" "$THIS_REV_URL" "$RESULTS_DIR" scripts/experiments/site-template "$BASE_URL"
           mv "$RESULTS_DIR"/jacoco* "$RESULTS_DIR/artifacts/"
-#  postGHCheck:
-#    runs-on: self-hosted
-#    needs: [ repro-jacoco ]
-#    env:
-#      BASE_URL: ${{ needs.build-matrix.outputs.base-url }}
-#    steps:
-#      - uses: LouisBrunner/checks-action@v1.1.1
-#        if: always()
-#        with:
-#          token: ${{ secrets.GITHUB_TOKEN }}
-#          name: Performance Evaluation
-#          details_url: $BASE_URL
-#          conclusion: "success" #${{ job.status }}
-#          output: |
-#            {"summary":"We ran a needlessly complex suite", "text":"*Cool numbers*: ${{ needs.repro-jacoco.outputs.jacoco-summary }}"}
+  build-site:
+    runs-on: self-hosted
+    needs: [ repro-jacoco ]
+    env:
+      RENV_PATHS_ROOT: /ci-logs/renv
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: 'jon-bell/fuzzing-build-site-action'
+          ref: 'main'
+      - name: Fetch workflow runs to compare to
+        id: fetch-compare
+        uses: jon-bell/list-workflow-runs-by-branch-action@main
+        with:
+          include_branches: ${{ inputs.report_on_branches}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build site
+        uses: jon-bell/fuzzing-build-site-action@main
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          comparisons: ${{ steps.fetch-compare.outputs.workflow_runs }}
