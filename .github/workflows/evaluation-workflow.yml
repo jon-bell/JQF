@@ -83,9 +83,6 @@ jobs:
     env:
       RESULTS_DIR: /ci-logs/public/${{ github.repository }}/${{ github.sha }}/${{ github.workflow }}/${{ github.run_id }}/${{ github.run_attempt }}
       TARGETS: ${{ needs.build-matrix.outputs.matrix-analyze }}
-      THIS_REV_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-      THIS_REV: ${{ github.ref_name }}
-      RENV_PATHS_ROOT: /ci-logs/renv
       BASE_URL: ${{ needs.build-matrix.outputs.base-url }}
       TRIALS: ${{ inputs.trials }}
       DURATION: ${{ inputs.duration }}
