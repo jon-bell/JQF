@@ -17,6 +17,11 @@ on:
         required: false
         default: fast-collision-free-coverage,reporting-ci
         type: string
+      fuzzer_to_invoke:
+        description: Path to script to invoke for fuzzing run, defaults to ./bin/jqf-zest
+        required: false
+        default: ./bin/jqf-zest
+        type: string
 jobs:
   build-matrix:
     runs-on: self-hosted
@@ -47,7 +52,7 @@ jobs:
       - name: Build JQF
         run: mvn -B -DskipTests install
       - name: Run Fuzzer
-        run: ./bin/jqf-zest -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results
+        run: ${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results
       - name: Collect Results
         run: |
           ls -R
