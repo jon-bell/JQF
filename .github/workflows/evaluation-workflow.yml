@@ -56,7 +56,7 @@ jobs:
       - name: Build JQF
         run: mvn -B -DskipTests install
       - name: Run Fuzzer
-        run: ${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results
+        run: bash -c "${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results"
       - name: Collect Results
         run: |
           ls -R
