@@ -59,7 +59,11 @@ jobs:
         run: bash -c "${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results"
       - name: Collect Results
         run: |
-          ls -R
+          mkdir -p fuzz-logs
+          mv fuzz-results/fuzz.log fuzz-logs
+
+          mv fuzz-logs ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
+
           mv fuzz-results/corpus ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}
           tar czf ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}.tgz ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}
           mv fuzz-results/failures ${{ matrix.config.id }}_failures_${{ matrix.config.runNumber }}
@@ -70,7 +74,11 @@ jobs:
           cp ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}.tgz "$RESULTS_DIR/"
           cp ${{ matrix.config.id }}_failures_${{ matrix.config.runNumber }}.tgz "$RESULTS_DIR/"
           cp ${{ matrix.config.id }}_plot_data_${{ matrix.config.runNumber }} "$RESULTS_DIR/"
-
+      - name: Archive Fuzz Logs
+        uses: actions/upload-artifact@v2
+        with:
+          path: ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
+          name: ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
       - name: Archive Corpus
         uses: actions/upload-artifact@v2
         with:
