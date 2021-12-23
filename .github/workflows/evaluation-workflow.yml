@@ -22,6 +22,10 @@ on:
         required: false
         default: ./bin/jqf-zest
         type: string
+      java_home:
+        required: false
+        default: /usr/lib/jvm/java-11-openjdk-amd64/
+        type: string
 jobs:
   build-matrix:
     runs-on: self-hosted
@@ -42,7 +46,7 @@ jobs:
     timeout-minutes: 1500
     needs: build-matrix
     env:
-      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64/
+      JAVA_HOME: ${{ inputs.java_home }}
       RESULTS_DIR: /ci-logs/public/${{ github.repository }}/${{ github.sha }}/${{ github.workflow }}/${{ github.run_id }}/${{ github.run_attempt }}/artifacts
       JVM_OPTS: -Dtime=${{ inputs.duration }} -Djqf.ei.QUIET_MODE=true -DZEST_STATS_REFRESH_TIME_PERIOD=60000 -DuseFastNonCollidingCoverageInstrumentation=true
     strategy:
@@ -91,6 +95,7 @@ jobs:
       BASE_URL: ${{ needs.build-matrix.outputs.base-url }}
       TRIALS: ${{ inputs.trials }}
       DURATION: ${{ inputs.duration }}
+      JAVA_HOME: ${{ inputs.java_home }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@v2
