@@ -60,7 +60,9 @@ jobs:
       - name: Collect Results
         run: |
           mkdir -p fuzz-logs
-          mv fuzz-results/fuzz.log fuzz-logs
+          if [ -f "fuzz-results/fuzz.log" ]; then
+            mv fuzz-results/fuzz.log fuzz-logs
+          fi
 
           mv fuzz-logs ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
 
