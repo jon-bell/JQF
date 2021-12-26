@@ -28,7 +28,7 @@ on:
         type: string
       runs_on:
         required: false
-        default: linux
+        default: self-hosted
         type: string
 jobs:
   build-matrix:
@@ -46,7 +46,7 @@ jobs:
           echo "::set-output name=matrix-analyze::$( python3 scripts/experiments/generate-experiment-matrix.py )"
           echo "::set-output name=base-url::https://ci.in.ripley.cloud/logs/public/${{ github.repository }}/${{ github.sha }}/$(./scripts/experiments/urlencode.sh "${{ github.workflow }}")/${{ github.run_id }}/${{ github.run_attempt }}/site/"
   run-fuzzer:
-    runs-on: [self-hosted, ${{ inputs.runs_on }}]
+    runs-on: ${{ inputs.runs_on }}
     timeout-minutes: 1500
     needs: build-matrix
     env:
