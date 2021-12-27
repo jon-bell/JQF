@@ -47,7 +47,7 @@ jobs:
           echo "::set-output name=base-url::https://ci.in.ripley.cloud/logs/public/${{ github.repository }}/${{ github.sha }}/$(./scripts/experiments/urlencode.sh "${{ github.workflow }}")/${{ github.run_id }}/${{ github.run_attempt }}/site/"
   run-fuzzer:
     runs-on: ${{ inputs.runs_on }}
-    timeout-minutes: 1500
+    timeout-minutes: 1560
     needs: build-matrix
     env:
       JAVA_HOME: ${{ inputs.java_home }}
@@ -60,7 +60,7 @@ jobs:
       - name: Build JQF
         run: mvn -B -DskipTests install
       - name: Run Fuzzer
-        run: bash -c "${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results"
+        run: timeout 25h bash -c "${{ inputs.fuzzer_to_invoke }} -c $(scripts/examples_classpath.sh) ${{ matrix.config.class }} ${{ matrix.config.method }} fuzz-results"
       - name: Collect Results
         run: |
           mkdir -p fuzz-logs
