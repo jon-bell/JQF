@@ -32,6 +32,7 @@ on:
         type: string
       PROFILE_HEAP:
         required: false
+        type: boolean
 jobs:
   build-matrix:
     runs-on: self-hosted
