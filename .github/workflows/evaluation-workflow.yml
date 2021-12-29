@@ -80,6 +80,10 @@ jobs:
           cp ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}.tgz "$RESULTS_DIR/"
           cp ${{ matrix.config.id }}_failures_${{ matrix.config.runNumber }}.tgz "$RESULTS_DIR/"
           cp ${{ matrix.config.id }}_plot_data_${{ matrix.config.runNumber }} "$RESULTS_DIR/"
+
+          # Also save any debug log files locally
+          find fuzz-results -type f \( -iname \*.csv -o -iname \*.log \) -exec cp {} "$RESULTS_DIR/"
+
       - name: Archive Fuzz Logs
         uses: actions/upload-artifact@v2
         with:
