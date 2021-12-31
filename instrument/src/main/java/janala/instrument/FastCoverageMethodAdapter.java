@@ -81,7 +81,7 @@ public class FastCoverageMethodAdapter extends MethodVisitor implements Opcodes 
   private void addConditionalJumpInstrumentation(int opcode, Label finalBranchTarget,
                                                  String instMethodName, String instMethodDesc) {
     int iid = instrumentationState.incAndGetFastCoverageId();
-    instrumentationState.incAndGetId(); //reserve another counter for the other side of this branch
+    instrumentationState.incAndGetFastCoverageId(); //reserve another counter for the other side of this branch
 
     Label intermediateBranchTarget = new Label();
     Label fallthrough = new Label();
