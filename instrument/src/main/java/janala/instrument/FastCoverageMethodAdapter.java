@@ -37,7 +37,15 @@ public class FastCoverageMethodAdapter extends MethodVisitor implements Opcodes 
   @Override
   public void visitMethodInsn(int opcode, String owner, String name, String desc, boolean itf) {
     if (opcode == INVOKESPECIAL && name.equals("<init>")) {
+      // The original coverage implementation for JQF added a branch probe before each constructor call.
+      // This instrumentation does too, so that the total branch probe counts match up.
+      // However, it appears that adding these probes does not improve fuzzer performance (an early version of this
+      // instrumentation didn't add them).
 
+      int iid = instrumentationState.incAndGetFastCoverageId();
+      addBipushInsn(mv, iid);
+      mv.visitInsn(ICONST_0);
+      mv.visitMethodInsn(INVOKESTATIC, Config.instance.analysisClass, "LOGJUMP", "(II)V", false);
 
       // The first call to <init> within a constructor (`isInit`) on the same or super class,
       // which is not associated with a NEW instruction (`newStack` == 0),
