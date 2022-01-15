@@ -6,3 +6,5 @@ jobs:
     with:
       duration: 24h
       trials: 20
+    secrets:
+      INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }
