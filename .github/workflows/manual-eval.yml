@@ -16,3 +16,5 @@ jobs:
     with:
       duration: ${{ github.event.inputs.duration }}
       trials: ${{ github.events.inputs.trials }}
+    secrets:
+      INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
