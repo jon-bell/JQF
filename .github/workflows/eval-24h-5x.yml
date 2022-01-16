@@ -6,5 +6,6 @@ jobs:
     with:
       duration: 24h
       trials: 5
+      JVM_OPTS: -Xmx12g
     secrets:
       INFLUX_TOKEN: ${{ secrets.INFLUX_TOKEN }}
