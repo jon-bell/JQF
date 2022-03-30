@@ -62,11 +62,7 @@ import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
 import edu.berkeley.cs.jqf.fuzz.guidance.TimeoutException;
-import edu.berkeley.cs.jqf.fuzz.util.Coverage;
-import edu.berkeley.cs.jqf.fuzz.util.CoverageFactory;
-import edu.berkeley.cs.jqf.fuzz.util.FastNonCollidingCoverage;
-import edu.berkeley.cs.jqf.fuzz.util.ICoverage;
-import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
+import edu.berkeley.cs.jqf.fuzz.util.*;
 import edu.berkeley.cs.jqf.instrument.tracing.FastCoverageSnoop;
 import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
@@ -159,6 +155,12 @@ public class ZestGuidance implements Guidance {
 
     /** Cumulative coverage for valid inputs. */
     protected ICoverage validCoverage = CoverageFactory.newInstance();
+
+    /** Cumulative coverage statistics, only incremented for unique traces. */
+    protected ICoverage totalCoverageFromUniqueTraces = CoverageFactory.newInstance();
+
+    /** Set of hashes of all paths generated so far. */
+    protected IntHashSet uniquePaths = new IntHashSet();
 
     /** The maximum number of keys covered by any single input found so far. */
     protected int maxCoverage = 0;
@@ -424,7 +426,7 @@ public class ZestGuidance implements Guidance {
 
     protected String getStatNames() {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
-            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes";
+            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes, h0, h1, h2";
     }
 
     /* Writes a line of text to a given log file. */
@@ -496,6 +498,8 @@ public class ZestGuidance implements Guidance {
         int nonZeroValidCount = validCoverage.getNonZeroCount();
         double nonZeroValidFraction = nonZeroValidCount * 100.0 / validCoverage.size();
 
+        DiversityMetricBuilder.HillNumbers hillNumbers = DiversityMetricBuilder.hillNumbersFromCoverage(totalCoverageFromUniqueTraces);
+
         if (console != null) {
             if (LIBFUZZER_COMPAT_OUTPUT) {
                 console.printf("#%,d\tNEW\tcov: %,d exec/s: %,d L: %,d\n", numTrials, nonZeroValidCount, intervalExecsPerSec, currentInput.size());
@@ -528,10 +532,10 @@ public class ZestGuidance implements Guidance {
             }
         }
 
-        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d",
+        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %.3f, %.3f, %.3f",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()), cyclesCompleted, currentParentInputIdx,
                 numSavedInputs, 0, 0, nonZeroFraction, uniqueFailures.size(), 0, 0, intervalExecsPerSecDouble,
-                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount);
+                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount, hillNumbers.h_0, hillNumbers.h_1, hillNumbers.h_2);
         appendLineToFile(statsFile, plotData);
     }
 
@@ -735,6 +739,10 @@ public class ZestGuidance implements Guidance {
             this.numTrials++;
 
             boolean valid = result == Result.SUCCESS;
+
+            if (uniquePaths.add(runCoverage.hashCode())){
+                totalCoverageFromUniqueTraces.updateBits(runCoverage);
+            }
 
             if (valid) {
                 // Increment valid counter
