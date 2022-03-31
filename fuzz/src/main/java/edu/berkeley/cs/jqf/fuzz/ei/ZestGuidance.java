@@ -426,7 +426,7 @@ public class ZestGuidance implements Guidance {
 
     protected String getStatNames() {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
-            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes, h0, h1, h2";
+            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes, b0, b1, b2";
     }
 
     /* Writes a line of text to a given log file. */
