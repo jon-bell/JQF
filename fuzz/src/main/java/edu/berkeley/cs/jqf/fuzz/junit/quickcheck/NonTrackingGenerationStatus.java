@@ -58,7 +58,8 @@ public class NonTrackingGenerationStatus implements GenerationStatus {
 
     @Override
     public int size() {
-        return geometric.sampleWithMean(MEAN_SIZE, random);
+        int ret= geometric.sampleWithMean(MEAN_SIZE, random);
+        return ret;
     }
 
     @Override

@@ -46,6 +46,8 @@ import java.util.stream.Collectors;
 
 import edu.berkeley.cs.jqf.fuzz.ei.ExecutionIndex.Prefix;
 import edu.berkeley.cs.jqf.fuzz.ei.ExecutionIndex.Suffix;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.ei.state.AbstractExecutionIndexingState;
 import edu.berkeley.cs.jqf.fuzz.ei.state.FastExecutionIndexingState;
 import edu.berkeley.cs.jqf.fuzz.ei.state.JanalaExecutionIndexingState;
@@ -113,7 +115,7 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
     /** Probability of splicing in {@link MappedInput#fuzz(Random, Map)} */
     protected final double STANDARD_SPLICING_PROBABILITY = 0.5;
 
-    /** Probability of splicing in {@link MappedInput#getOrGenerateFresh(ExecutionIndex, Random)}  */
+    /** Probability of splicing in {@link MappedInput#getOrGenerateFresh(ExecutionIndex, TypedGeneratedValue.Type, Random)}  */
     protected final double DEMAND_DRIVEN_SPLICING_PROBABILITY = 0.0;
 
     /**
@@ -188,30 +190,31 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
      * to mutate.
      */
     @Override
-    protected InputStream createParameterStream() {
+    protected TypedInputStream createParameterStream() {
+        throw new UnsupportedOperationException("TypedInputStream is not supported in this guidance");
         // Return an input stream that uses the EI map
-        return new InputStream() {
-            @Override
-            public int read() throws IOException {
-
-                // lastEvent must not be null
-                if (eiState.getLastEventIid() == -1) {
-                    throw new GuidanceException("Could not compute execution index; no instrumentation?");
-                }
-
-                assert currentInput instanceof MappedInput : "This guidance should only mutate MappedInput(s)";
-
-                MappedInput mappedInput = (MappedInput) currentInput;
-
-                // Get the execution index of the last event
-                ExecutionIndex executionIndex = eiState.getExecutionIndex(eiState.getLastEventIid());
-
-                // Attempt to get a value from the map, or else generate a random value
-                int value = mappedInput.getOrGenerateFresh(executionIndex, random);
-
-                return value;
-            }
-        };
+//        return new InputStream() {
+//            @Override
+//            public int read() throws IOException {
+//
+//                // lastEvent must not be null
+//                if (eiState.getLastEventIid() == -1) {
+//                    throw new GuidanceException("Could not compute execution index; no instrumentation?");
+//                }
+//
+//                assert currentInput instanceof MappedInput : "This guidance should only mutate MappedInput(s)";
+//
+//                MappedInput mappedInput = (MappedInput) currentInput;
+//
+//                // Get the execution index of the last event
+//                ExecutionIndex executionIndex = eiState.getExecutionIndex(eiState.getLastEventIid());
+//
+//                // Attempt to get a value from the map, or else generate a random value
+//                int value = mappedInput.getOrGenerateFresh(executionIndex, random);
+//
+//                return value;
+//            }
+//        };
     }
 
     @Override
@@ -530,14 +533,14 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
          *                               has been executed
          */
         @Override
-        public int getOrGenerateFresh(ExecutionIndex key, Random random) throws IllegalStateException {
+        public TypedGeneratedValue getOrGenerateFresh(ExecutionIndex key, TypedGeneratedValue.Type desiredType, Random random) throws IllegalStateException {
             if (executed) {
                 throw new IllegalStateException("Cannot generate fresh values after execution");
             }
 
             // If we reached a limit, then just return EOF
             if (orderedKeys.size() >= MAX_INPUT_SIZE) {
-                return -1;
+                return null;
             }
 
             // Try to get existing values
@@ -560,7 +563,7 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
                 // If we could not splice or were unsuccessful, try to generate a new input
                 if (val == null) {
                     if (GENERATE_EOF_WHEN_OUT) {
-                        return -1;
+                        return null;
                     }
                     if (random.nextDouble() < DEMAND_DRIVEN_SPLICING_PROBABILITY) {
                         // TODO: Find a random inputLocation with same EC,
@@ -582,8 +585,8 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
 
             // Mark this key as visited
             orderedKeys.add(key);
-
-            return val;
+            throw new UnsupportedOperationException("TypedInputStream is not supported in this guidance");
+//            return val;
         }
 
 
@@ -850,21 +853,22 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
         }
 
         @Override
-        public Iterator<Integer> iterator() {
-            return new Iterator<Integer>() {
-
-                Iterator<ExecutionIndex> keyIt = orderedKeys.iterator();
-
-                @Override
-                public boolean hasNext() {
-                    return keyIt.hasNext();
-                }
-
-                @Override
-                public Integer next() {
-                    return valuesMap.get(keyIt.next());
-                }
-            };
+        public Iterator<TypedGeneratedValue> iterator() {
+            throw new UnsupportedOperationException("TypedInputStream is not supported in this guidance");
+//            return new Iterator<Integer>() {
+//
+//                Iterator<ExecutionIndex> keyIt = orderedKeys.iterator();
+//
+//                @Override
+//                public boolean hasNext() {
+//                    return keyIt.hasNext();
+//                }
+//
+//                @Override
+//                public Integer next() {
+//                    return valuesMap.get(keyIt.next());
+//                }
+//            };
         }
     }
 
@@ -902,7 +906,7 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
         }
 
         @Override
-        public int getOrGenerateFresh(ExecutionIndex key, Random random) {
+        public TypedGeneratedValue getOrGenerateFresh(ExecutionIndex key, TypedGeneratedValue.Type desiredType, Random random) {
             int value;
             try {
                 value = in.read();
@@ -916,7 +920,7 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
                 // Bail if configured to do so
                 if (GENERATE_EOF_WHEN_OUT) {
                     // Returned as EOF but not added to the map
-                    return -1;
+                    return null;
                 }
 
                 // More commonly, generate a random value
@@ -926,8 +930,8 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
             // Populate the value map
             orderedKeys.add(key);
             valuesMap.put(key, value);
-
-            return value;
+            throw new UnsupportedOperationException("TypedInputStream is not supported in this guidance");
+//            return value;
         }
 
         @Override

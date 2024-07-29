@@ -29,17 +29,7 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Console;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -58,6 +48,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -241,7 +233,7 @@ public class ZestGuidance implements Guidance {
     protected final boolean SAVE_ONLY_VALID = Boolean.getBoolean("jqf.ei.SAVE_ONLY_VALID");
 
     /** Max input size to generate. */
-    protected final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
+    public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
     protected final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
@@ -634,23 +626,8 @@ public class ZestGuidance implements Guidance {
      *
      * @return an InputStream that delivers parameters to the generators
      */
-    protected InputStream createParameterStream() {
-        // Return an input stream that reads bytes from a linear array
-        return new InputStream() {
-            int bytesRead = 0;
-
-            @Override
-            public int read() throws IOException {
-                assert currentInput instanceof LinearInput : "ZestGuidance should only mutate LinearInput(s)";
-
-                // For linear inputs, get with key = bytesRead (which is then incremented)
-                LinearInput linearInput = (LinearInput) currentInput;
-                // Attempt to get a value from the list, or else generate a random value
-                int ret = linearInput.getOrGenerateFresh(bytesRead++, random);
-                // infoLog("read(%d) = %d", bytesRead, ret);
-                return ret;
-            }
-        };
+    protected TypedInputStream createParameterStream() {
+        return new TypedInputStream((LinearInput) currentInput, random);
     }
 
     @Override
@@ -949,10 +926,9 @@ public class ZestGuidance implements Guidance {
     }
 
     protected void writeCurrentInputToFile(File saveFile) throws IOException {
-        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(saveFile))) {
-            for (Integer b : currentInput) {
-                assert (b >= 0 && b < 256);
-                out.write(b);
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(saveFile))) {
+            for (TypedGeneratedValue b : currentInput) {
+                out.writeObject(b);
             }
         }
 
@@ -1086,7 +1062,7 @@ public class ZestGuidance implements Guidance {
     /**
      * A candidate or saved test input that maps objects of type K to bytes.
      */
-    public static abstract class Input<K> implements Iterable<Integer> {
+    public static abstract class Input<K> implements Iterable<TypedGeneratedValue> {
 
         /**
          * The file where this input is saved.
@@ -1170,7 +1146,7 @@ public class ZestGuidance implements Guidance {
             desc = String.format("src:%06d", toClone.id);
         }
 
-        public abstract int getOrGenerateFresh(K key, Random random);
+        public abstract TypedGeneratedValue getOrGenerateFresh(K key, TypedGeneratedValue.Type desiredType, Random random);
         public abstract int size();
         public abstract Input fuzz(Random random);
         public abstract void gc();
@@ -1214,7 +1190,7 @@ public class ZestGuidance implements Guidance {
     public class LinearInput extends Input<Integer> {
 
         /** A list of byte values (0-255) ordered by their index. */
-        protected ArrayList<Integer> values;
+        protected ArrayList<TypedGeneratedValue> values;
 
         /** The number of bytes requested so far */
         protected int requested = 0;
@@ -1229,9 +1205,7 @@ public class ZestGuidance implements Guidance {
             this.values = new ArrayList<>(other.values);
         }
 
-
-        @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
+        public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
             // Otherwise, make sure we are requesting just beyond the end-of-list
             // assert (key == values.size());
             if (key != requested) {
@@ -1241,22 +1215,31 @@ public class ZestGuidance implements Guidance {
 
             // Don't generate over the limit
             if (requested >= MAX_INPUT_SIZE) {
-                return -1;
+                return null;
             }
 
             // If it exists in the list, return it
             if (key < values.size()) {
                 requested++;
                 // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                return values.get(key);
+                TypedGeneratedValue ret = values.get(key);
+                // Check if the type is correct
+                if (ret.type == desired) {
+                    return ret;
+                } else{
+                    // If not, generate a new one and update the value in the list
+                    TypedGeneratedValue newVal = TypedGeneratedValue.generate(desired, random);
+                    values.set(key, newVal);
+                    return newVal;
+                }
             }
 
             // Handle end of stream
             if (GENERATE_EOF_WHEN_OUT) {
-                return -1;
+                return null;
             } else {
                 // Just generate a random input
-                int val = random.nextInt(256);
+                TypedGeneratedValue val = TypedGeneratedValue.generate(desired, random);
                 values.add(val);
                 requested++;
                 // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
@@ -1313,10 +1296,7 @@ public class ZestGuidance implements Guidance {
                     if (i >= newInput.values.size()) {
                         break;
                     }
-
-                    // Otherwise, apply a random mutation
-                    int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                    newInput.values.set(i, mutatedValue);
+                    newInput.values.get(i).mutate(random, setToZero);
                 }
             }
 
@@ -1324,44 +1304,44 @@ public class ZestGuidance implements Guidance {
         }
 
         @Override
-        public Iterator<Integer> iterator() {
+        public Iterator<TypedGeneratedValue> iterator() {
             return values.iterator();
         }
     }
 
     public class SeedInput extends LinearInput {
         final File seedFile;
-        final InputStream in;
+        final ObjectInputStream in;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
-            this.in = new BufferedInputStream(new FileInputStream(seedFile));
+            this.in = new ObjectInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
         }
 
         @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
-            int value;
+        public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
+            TypedGeneratedValue value;
             try {
-                value = in.read();
-            } catch (IOException e) {
+                value = (TypedGeneratedValue) in.readObject();
+            } catch (IOException | ClassNotFoundException e) {
                 throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
 
             }
 
             // assert (key == values.size())
-            if (key != values.size() && value != -1) {
+            if (key != values.size() && value != null) {
                 throw new IllegalStateException(String.format("Bytes from seed out of order. " +
                         "Size = %d, Key = %d", values.size(), key));
             }
 
-            if (value >= 0) {
+            if (value != null) {
                 requested++;
                 values.add(value);
             }
 
-            // If value is -1, then it is returned (as EOF) but not added to the list
+            // If value is null, then it is returned (as EOF) but not added to the list
             return value;
         }
 
