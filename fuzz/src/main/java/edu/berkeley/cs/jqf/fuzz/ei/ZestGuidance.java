@@ -1216,7 +1216,7 @@ public class ZestGuidance implements Guidance {
 
             // Don't generate over the limit
             if (requested >= MAX_INPUT_SIZE) {
-                throw new IllegalStateException("Input size limit exceeded");
+                throw new IllegalStateException(new EOFException("Input size limit exceeded"));
             }
 
             // If it exists in the list, return it
