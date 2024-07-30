@@ -1288,7 +1288,7 @@ public class ZestGuidance implements Guidance {
                 // Select a random offset and size
                 int offset = random.nextInt(newInput.values.size());
                 // desc += String.format(":%d@%d", mutationSize, idx);
-                newInput.values.get(i).mutate(random, setToZero);
+                newInput.values.get(offset).mutate(random, setToZero);
             }
 
             return newInput;
