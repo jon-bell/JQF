@@ -40,7 +40,7 @@ public abstract class TypedGeneratedValue implements Serializable {
 
     public void writeTo(DataOutputStream out) {
         try {
-            out.writeUTF(type.name());
+            out.writeUTF(type.toString());
             switch (type) {
                 case String:
                     out.writeUTF(((StringValue) this).value);

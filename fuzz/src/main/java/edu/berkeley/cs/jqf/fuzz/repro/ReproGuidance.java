@@ -47,6 +47,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -75,7 +77,7 @@ public class ReproGuidance implements Guidance {
     private final File traceDir;
     private int nextFileIdx = 0;
     private List<PrintStream> traceStreams = new ArrayList<>();
-    private InputStream inputStream;
+    private TypedInputStream inputStream;
     private Coverage coverage = new Coverage();
 
     private Set<String> branchesCoveredInCurrentRun;
@@ -140,6 +142,8 @@ public class ReproGuidance implements Guidance {
         this.stopOnFailure = value;
     }
 
+
+
     /**
      * Returns an input stream corresponding to the next input file.
      *
@@ -149,7 +153,7 @@ public class ReproGuidance implements Guidance {
     public InputStream getInput() {
         try {
             File inputFile = inputFiles[nextFileIdx];
-            this.inputStream = new BufferedInputStream(new FileInputStream(inputFile));
+            this.inputStream = new TypedInputStream(new ZestGuidance.SeedInput(inputFile), null);
 
             if (allBranchesCovered != null) {
                 branchesCoveredInCurrentRun.clear();

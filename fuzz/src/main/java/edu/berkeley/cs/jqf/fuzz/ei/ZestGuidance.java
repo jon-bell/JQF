@@ -238,7 +238,7 @@ public class ZestGuidance implements Guidance {
     public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
-    protected final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
+    protected static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
     /** Baseline number of mutated children to produce from a given parent input. */
     protected final int NUM_CHILDREN_BASELINE = 50;
@@ -247,10 +247,10 @@ public class ZestGuidance implements Guidance {
     protected final int NUM_CHILDREN_MULTIPLIER_FAVORED = 20;
 
     /** Mean number of mutations to perform in each round. */
-    protected final double MEAN_MUTATION_COUNT = 8.0;
+    protected static final double MEAN_MUTATION_COUNT = 8.0;
 
     /** Mean number of contiguous bytes to mutate in each mutation. */
-    protected final double MEAN_MUTATION_SIZE = 4.0; // Bytes
+    protected static final double MEAN_MUTATION_SIZE = 4.0; // Bytes
 
     /** Whether to save inputs that only add new coverage bits (but no new responsibilities). */
     protected final boolean DISABLE_SAVE_NEW_COUNTS = Boolean.getBoolean("jqf.ei.DISABLE_SAVE_NEW_COUNTS");
@@ -1188,7 +1188,7 @@ public class ZestGuidance implements Guidance {
         }
     }
 
-    public class LinearInput extends Input<Integer> {
+    public static class LinearInput extends Input<Integer> {
 
         /** A list of byte values (0-255) ordered by their index. */
         protected ArrayList<TypedGeneratedValue> values;
@@ -1317,15 +1317,17 @@ public class ZestGuidance implements Guidance {
         }
     }
 
-    public class SeedInput extends LinearInput {
+    public static class SeedInput extends LinearInput {
         final File seedFile;
         final DataInputStream in;
+        int valuesRemaining = 0;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
             this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
+            this.valuesRemaining = this.in.readInt();
         }
 
         @Override
