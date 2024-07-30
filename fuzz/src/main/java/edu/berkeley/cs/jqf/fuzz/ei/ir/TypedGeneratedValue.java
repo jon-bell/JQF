@@ -2,13 +2,41 @@ package edu.berkeley.cs.jqf.fuzz.ei.ir;
 
 import com.pholser.junit.quickcheck.random.SourceOfRandomness;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Random;
 
 public abstract class TypedGeneratedValue implements Serializable {
     private static final long serialVersionUID = 1L;
     public Type type;
+
+    public static TypedGeneratedValue readOneValue(DataInputStream dis) throws IOException {
+        Type type = Type.valueOf(dis.readUTF());
+        switch (type) {
+            case String:
+                return new StringValue(dis.readUTF());
+            case Integer:
+                return new IntegerValue(dis.readInt());
+            case Float:
+                return new FloatValue(dis.readFloat());
+            case Boolean:
+                return new BooleanValue(dis.readBoolean());
+            case Byte:
+                return new ByteValue(dis.readByte());
+            case Long:
+                return new LongValue(dis.readLong());
+            case Double:
+                return new DoubleValue(dis.readDouble());
+            case Short:
+                return new ShortValue(dis.readShort());
+            case Char:
+                return new CharValue(dis.readChar());
+            default:
+                throw new RuntimeException("Unknown type");
+        }
+    }
 
     public void writeTo(DataOutputStream out) {
         try {
@@ -42,7 +70,6 @@ public abstract class TypedGeneratedValue implements Serializable {
                     out.writeChar(((CharValue) this).value);
                     break;
             }
-            out.writeChar('\n');
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
