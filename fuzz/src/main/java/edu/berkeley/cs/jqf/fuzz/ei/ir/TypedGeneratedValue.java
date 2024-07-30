@@ -257,8 +257,8 @@ public abstract class TypedGeneratedValue implements Serializable {
                 value = 0;
                 return;
             }
-            value = Float.intBitsToFloat(random.nextInt());
-//            value = random.nextFloat();
+//            value = Float.intBitsToFloat(random.nextInt());
+            value = random.nextFloat();
         }
     }
 
