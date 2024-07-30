@@ -2,6 +2,7 @@ package edu.berkeley.cs.jqf.fuzz.ei.ir;
 
 import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -30,35 +31,26 @@ public class TypedInputStream extends InputStream {
 
     public double readDouble() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Double);
-//        if(ret == null)
-//            return -1;
         return ((TypedGeneratedValue.DoubleValue) ret).value;
     }
 
     public long readLong() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Long);
-        if (ret == null)
-            return -1;
         return ((TypedGeneratedValue.LongValue) ret).value;
     }
 
     public int readInt() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Integer);
-//        if(ret == null)
-//            return -1;
         return ((TypedGeneratedValue.IntegerValue) ret).value;
     }
 
     public byte readByte() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Byte);
-//        if(ret == null)
-//            return -1;
         return ((TypedGeneratedValue.ByteValue) ret).value;
     }
 
     public boolean readBoolean() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Boolean);
-
         return ((TypedGeneratedValue.BooleanValue) ret).value;
     }
 
@@ -69,22 +61,16 @@ public class TypedInputStream extends InputStream {
 
     public char readChar() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Char);
-//        if(ret == null)
-//            return (char) -1;
         return ((TypedGeneratedValue.CharValue) ret).value;
     }
 
     public float readFloat() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Float);
-//        if(ret == null)
-//            return -1;
         return ((TypedGeneratedValue.FloatValue) ret).value;
     }
 
     public short readShort() throws IOException {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Short);
-//        if(ret == null)
-//            return -1;
         return ((TypedGeneratedValue.ShortValue) ret).value;
     }
 }

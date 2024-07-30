@@ -76,7 +76,7 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     @Override
     public short nextShort() {
         try{
-            return (short) inputStream.readShort();
+            return  inputStream.readShort();
         } catch(IOException e){
             throw new GuidanceException(e);
         }

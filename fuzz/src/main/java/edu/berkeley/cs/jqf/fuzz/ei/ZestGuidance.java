@@ -66,6 +66,8 @@ import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
 
+import javax.sound.sampled.Line;
+
 import static java.lang.Math.ceil;
 import static java.lang.Math.log;
 
@@ -926,10 +928,9 @@ public class ZestGuidance implements Guidance {
     }
 
     protected void writeCurrentInputToFile(File saveFile) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(saveFile))) {
-            for (TypedGeneratedValue b : currentInput) {
-                out.writeObject(b);
-            }
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(saveFile)))) {
+            if(currentInput instanceof LinearInput)
+                ((LinearInput) currentInput).writeTo(out);
         }
 
     }
@@ -1215,7 +1216,7 @@ public class ZestGuidance implements Guidance {
 
             // Don't generate over the limit
             if (requested >= MAX_INPUT_SIZE) {
-                return null;
+                throw new IllegalStateException("Input size limit exceeded");
             }
 
             // If it exists in the list, return it
@@ -1236,7 +1237,7 @@ public class ZestGuidance implements Guidance {
 
             // Handle end of stream
             if (GENERATE_EOF_WHEN_OUT) {
-                return null;
+                throw new IllegalStateException(new EOFException("End of input stream"));
             } else {
                 // Just generate a random input
                 TypedGeneratedValue val = TypedGeneratedValue.generate(desired, random);
@@ -1306,6 +1307,13 @@ public class ZestGuidance implements Guidance {
         @Override
         public Iterator<TypedGeneratedValue> iterator() {
             return values.iterator();
+        }
+
+        public void writeTo(DataOutputStream out) throws IOException{
+            out.writeInt(values.size());
+            for (TypedGeneratedValue value : values) {
+                value.writeTo(out);
+            }
         }
     }
 
