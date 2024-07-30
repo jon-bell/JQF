@@ -30,6 +30,8 @@
 package edu.berkeley.cs.jqf.fuzz.ei;
 
 import java.io.File;
+import java.time.Duration;
+import java.time.format.DateTimeParseException;
 
 import edu.berkeley.cs.jqf.fuzz.junit.GuidedFuzzing;
 import org.junit.runner.Result;
@@ -64,12 +66,22 @@ public class ZestDriver {
             String title = testClassName+"#"+testMethodName;
             ZestGuidance guidance = null;
 
+            Duration duration = null;
+            String time = System.getProperty("time");
+            if (time != null && !time.isEmpty()) {
+                try {
+                    duration = Duration.parse("PT" + time);
+                } catch (DateTimeParseException e) {
+                    throw new IllegalArgumentException("Invalid time duration: " + time);
+                }
+            }
+
             if (seedFiles == null) {
-                guidance = new ZestGuidance(title, null, outputDirectory);
+                guidance = new ZestGuidance(title, duration, outputDirectory);
             } else if (seedFiles.length == 1 && seedFiles[0].isDirectory()) {
-                guidance = new ZestGuidance(title, null, outputDirectory, seedFiles[0]);
+                guidance = new ZestGuidance(title, duration, outputDirectory, seedFiles[0]);
             } else {
-                guidance = new ZestGuidance(title, null, outputDirectory, seedFiles);
+                guidance = new ZestGuidance(title, duration, outputDirectory, seedFiles);
             }
 
 
