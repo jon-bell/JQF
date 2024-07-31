@@ -30,7 +30,6 @@
 package edu.berkeley.cs.jqf.fuzz.ei;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -41,7 +40,6 @@ import java.util.Date;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -62,8 +60,6 @@ import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
 import edu.berkeley.cs.jqf.instrument.tracing.FastCoverageSnoop;
 import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
-import org.eclipse.collections.api.ByteIterable;
-import org.eclipse.collections.api.iterator.ByteIterator;
 import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
 import org.eclipse.collections.impl.list.mutable.primitive.ByteArrayList;
@@ -1193,7 +1189,8 @@ public class ZestGuidance implements Guidance {
         protected ByteArrayList values;
 
         /** The number of bytes requested so far */
-        protected int requested = 0;
+        protected int bytesRead = 0;
+        protected int numRequests = 0;
 
         protected LinearInput parent;
 
@@ -1212,7 +1209,8 @@ public class ZestGuidance implements Guidance {
         public double getOrGenerateFreshDouble(int key, Random random){
             checkGetRequest(key);
             key = key * 9;
-            requested++;
+            bytesRead +=8;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Double.ordinal()){
@@ -1266,7 +1264,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead +=8;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Long.ordinal()){
@@ -1308,7 +1307,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead +=4;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Integer.ordinal()){
@@ -1336,7 +1336,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead++;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Byte.ordinal()){
@@ -1357,7 +1358,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead +=2;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Char.ordinal()){
@@ -1381,7 +1383,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead +=4;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Float.ordinal()){
@@ -1410,7 +1413,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead +=2;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Short.ordinal()){
@@ -1434,7 +1438,8 @@ public class ZestGuidance implements Guidance {
             checkGetRequest(key);
             key = key * 9;
 
-            requested++;
+            bytesRead++;
+            numRequests++;
             if(key < this.size()){
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Boolean.ordinal()){
@@ -1451,21 +1456,21 @@ public class ZestGuidance implements Guidance {
             }
         }
         private void addPaddingFor(TypedInputStream.Type type){
-            int bytesNeeeded = 8 - type.bytes;
-            for(int i = 0; i < bytesNeeeded; i++){
+            int bytesNeeded = 8 - type.bytes;
+            for(int i = 0; i < bytesNeeded; i++){
                 this.add((byte) 0);
             }
         }
         private void checkGetRequest(int key) {
             // Otherwise, make sure we are requesting just beyond the end-of-list
             // assert (key == values.size());
-            if (key != requested) {
-                throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
-                        "Size = %d, Key = %d", this.size(), key));
-            }
+//            if (key != requested) {
+//                throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
+//                        "Size = %d, Key = %d", this.size(), key));
+//            }
 
             // Don't generate over the limit
-            if (requested >= MAX_INPUT_SIZE) {
+            if (bytesRead >= MAX_INPUT_SIZE) {
                 throw new IllegalStateException(new EOFException("Input too large"));
             }
         }
@@ -1527,13 +1532,13 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            if(this.size() == requested * 9)
+            if(this.size() == numRequests * 9)
                 return;
             if(this.size() % 9 != 0){
                 throw new IllegalStateException("Size of input is not a multiple of 9");
             }
-            byte[] newValues = new byte[requested * 9];
-            System.arraycopy(values.toArray(), 0, newValues, 0, requested * 9);
+            byte[] newValues = new byte[numRequests * 9];
+            System.arraycopy(values.toArray(), 0, newValues, 0, numRequests * 9);
             values = new ByteArrayList(newValues);
 
             // Inputs should not be empty, otherwise mutations don't work
@@ -1555,7 +1560,7 @@ public class ZestGuidance implements Guidance {
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(this.requested) * 9;
+                int offset = random.nextInt(this.numRequests) * 9;
                 TypedInputStream.Type typeAtOffset = TypedInputStream.Type.values()[newInput.get(offset)];
 
                 // desc += String.format(":%d@%d", mutationSize, idx);
