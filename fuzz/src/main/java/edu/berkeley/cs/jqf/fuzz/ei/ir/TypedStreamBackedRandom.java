@@ -48,7 +48,7 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
         if(bound <= 0){
             throw new IllegalArgumentException("bound must be positive");
         }
-        return Math.abs(this.nextInt()) % bound;
+        return Math.abs(this.nextInt() % bound);
     }
 
     public long nextLong() {
