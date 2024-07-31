@@ -28,11 +28,7 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -850,21 +846,10 @@ public class ExecutionIndexingGuidance extends ZestGuidance {
         }
 
         @Override
-        public Iterator<Integer> iterator() {
-            return new Iterator<Integer>() {
-
-                Iterator<ExecutionIndex> keyIt = orderedKeys.iterator();
-
-                @Override
-                public boolean hasNext() {
-                    return keyIt.hasNext();
-                }
-
-                @Override
-                public Integer next() {
-                    return valuesMap.get(keyIt.next());
-                }
-            };
+        public void writeTo(BufferedOutputStream out) throws IOException {
+            for(ExecutionIndex ei : orderedKeys){
+                out.write(valuesMap.get(ei));
+            }
         }
     }
 

@@ -70,8 +70,11 @@ import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
 import edu.berkeley.cs.jqf.instrument.tracing.FastCoverageSnoop;
 import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
+import org.eclipse.collections.api.ByteIterable;
+import org.eclipse.collections.api.iterator.ByteIterator;
 import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
+import org.eclipse.collections.impl.list.mutable.primitive.ByteArrayList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
 
 import static java.lang.Math.ceil;
@@ -950,12 +953,8 @@ public class ZestGuidance implements Guidance {
 
     protected void writeCurrentInputToFile(File saveFile) throws IOException {
         try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(saveFile))) {
-            for (Integer b : currentInput) {
-                assert (b >= 0 && b < 256);
-                out.write(b);
-            }
+            currentInput.writeTo(out);
         }
-
     }
 
     /* Saves an interesting input to the queue. */
@@ -1086,7 +1085,7 @@ public class ZestGuidance implements Guidance {
     /**
      * A candidate or saved test input that maps objects of type K to bytes.
      */
-    public static abstract class Input<K> implements Iterable<Integer> {
+    public static abstract class Input<K> {
 
         /**
          * The file where this input is saved.
@@ -1209,24 +1208,26 @@ public class ZestGuidance implements Guidance {
             double uniform = random.nextDouble();
             return (int) ceil(log(1 - uniform) / log(1 - p));
         }
+
+        public abstract void writeTo(BufferedOutputStream out) throws IOException;
     }
 
     public class LinearInput extends Input<Integer> {
 
         /** A list of byte values (0-255) ordered by their index. */
-        protected ArrayList<Integer> values;
+        protected ByteArrayList values;
 
         /** The number of bytes requested so far */
         protected int requested = 0;
 
         public LinearInput() {
             super();
-            this.values = new ArrayList<>();
+            this.values = new ByteArrayList();
         }
 
         public LinearInput(LinearInput other) {
             super(other);
-            this.values = new ArrayList<>(other.values);
+            this.values = new ByteArrayList(other.values.toArray());
         }
 
 
@@ -1257,7 +1258,7 @@ public class ZestGuidance implements Guidance {
             } else {
                 // Just generate a random input
                 int val = random.nextInt(256);
-                values.add(val);
+                values.add((byte) val);
                 requested++;
                 // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
                 return val;
@@ -1279,8 +1280,9 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            values = new ArrayList<>(values.subList(0, requested));
-            values.trimToSize();
+            byte[] newValues = new byte[requested];
+            System.arraycopy(values.toArray(), 0, newValues, 0, requested);
+            values = new ByteArrayList(newValues);
 
             // Inputs should not be empty, otherwise mutations don't work
             if (values.isEmpty()) {
@@ -1316,7 +1318,7 @@ public class ZestGuidance implements Guidance {
 
                     // Otherwise, apply a random mutation
                     int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                    newInput.values.set(i, mutatedValue);
+                    newInput.values.set(i, (byte) mutatedValue);
                 }
             }
 
@@ -1324,8 +1326,14 @@ public class ZestGuidance implements Guidance {
         }
 
         @Override
-        public Iterator<Integer> iterator() {
-            return values.iterator();
+        public void writeTo(BufferedOutputStream out) throws IOException {
+            ByteIterator iter = this.values.byteIterator();
+            while (iter.hasNext()) {
+                int b = Byte.toUnsignedInt(iter.next());
+                //For compatibility, we write the byte as an int
+                assert (b >= 0 && b < 256);
+                out.write(b);
+            }
         }
     }
 
@@ -1358,7 +1366,7 @@ public class ZestGuidance implements Guidance {
 
             if (value >= 0) {
                 requested++;
-                values.add(value);
+                values.add((byte) value);
             }
 
             // If value is -1, then it is returned (as EOF) but not added to the list
