@@ -1220,6 +1220,10 @@ public class ZestGuidance implements Guidance {
         /** The number of bytes requested so far */
         protected int requested = 0;
 
+        protected LinearInput parent;
+
+        protected boolean dirty;
+
         public LinearInput() {
             super();
             this.values = new ByteArrayList();
@@ -1227,9 +1231,8 @@ public class ZestGuidance implements Guidance {
 
         public LinearInput(LinearInput other) {
             super(other);
-            this.values = new ByteArrayList(other.values.toArray());
+            this.parent = other;
         }
-
 
         @Override
         public int getOrGenerateFresh(Integer key, Random random) {
@@ -1237,7 +1240,7 @@ public class ZestGuidance implements Guidance {
             // assert (key == values.size());
             if (key != requested) {
                 throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
+                        "Size = %d, Key = %d", this.size(), key));
             }
 
             // Don't generate over the limit
@@ -1246,10 +1249,10 @@ public class ZestGuidance implements Guidance {
             }
 
             // If it exists in the list, return it
-            if (key < values.size()) {
+            if (key < this.size()) {
                 requested++;
                 // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                return values.get(key);
+                return this.get(key);
             }
 
             // Handle end of stream
@@ -1258,16 +1261,54 @@ public class ZestGuidance implements Guidance {
             } else {
                 // Just generate a random input
                 int val = random.nextInt(256);
-                values.add((byte) val);
+                this.add((byte) val);
                 requested++;
                 // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
                 return val;
             }
         }
 
+        private void add(byte b) {
+            if (!dirty) {
+                dirty = true;
+                if (this.parent == null) {
+                    values = new ByteArrayList();
+                } else {
+                    values = new ByteArrayList(this.parent.values.toArray());
+                }
+            }
+            values.add(b);
+        }
+
+        private void set(int pos, byte b) {
+            if (!dirty) {
+                dirty = true;
+                if (this.parent == null) {
+                    values = new ByteArrayList();
+                } else {
+                    values = new ByteArrayList(this.parent.values.toArray());
+                }
+            }
+            values.set(pos, b);
+        }
+
+        private int get(int pos) {
+            if (this.dirty) {
+                return Byte.toUnsignedInt(values.get(pos));
+            } else {
+                return this.parent.get(pos);
+            }
+        }
+
         @Override
         public int size() {
-            return values.size();
+            if (this.dirty) {
+                return values.size();
+            } else if (this.parent == null) {
+                return 0;
+            } else {
+                return this.parent.size();
+            }
         }
 
         /**
@@ -1304,7 +1345,7 @@ public class ZestGuidance implements Guidance {
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(newInput.values.size());
+                int offset = random.nextInt(newInput.size());
                 int mutationSize = sampleGeometric(random, MEAN_MUTATION_SIZE);
 
                 // desc += String.format(":%d@%d", mutationSize, idx);
@@ -1312,13 +1353,13 @@ public class ZestGuidance implements Guidance {
                 // Mutate a contiguous set of bytes from offset
                 for (int i = offset; i < offset + mutationSize; i++) {
                     // Don't go past end of list
-                    if (i >= newInput.values.size()) {
+                    if (i >= newInput.size()) {
                         break;
                     }
 
                     // Otherwise, apply a random mutation
                     int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                    newInput.values.set(i, (byte) mutatedValue);
+                    newInput.set(i, (byte) mutatedValue);
                 }
             }
 
@@ -1327,13 +1368,7 @@ public class ZestGuidance implements Guidance {
 
         @Override
         public void writeTo(BufferedOutputStream out) throws IOException {
-            ByteIterator iter = this.values.byteIterator();
-            while (iter.hasNext()) {
-                int b = Byte.toUnsignedInt(iter.next());
-                //For compatibility, we write the byte as an int
-                assert (b >= 0 && b < 256);
-                out.write(b);
-            }
+            out.write(this.values.toArray());
         }
     }
 
