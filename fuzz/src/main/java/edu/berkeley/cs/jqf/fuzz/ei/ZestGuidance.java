@@ -236,7 +236,7 @@ public class ZestGuidance implements Guidance {
     protected final boolean SAVE_ONLY_VALID = Boolean.getBoolean("jqf.ei.SAVE_ONLY_VALID");
 
     /** Max input size to generate. */
-    protected final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
+    protected static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
     protected final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
@@ -248,10 +248,7 @@ public class ZestGuidance implements Guidance {
     protected final int NUM_CHILDREN_MULTIPLIER_FAVORED = 20;
 
     /** Mean number of mutations to perform in each round. */
-    protected final double MEAN_MUTATION_COUNT = 8.0;
-
-    /** Mean number of contiguous bytes to mutate in each mutation. */
-    protected final double MEAN_MUTATION_SIZE = 4.0; // Bytes
+    protected static final double MEAN_MUTATION_COUNT = 8.0;
 
     /** Whether to save inputs that only add new coverage bits (but no new responsibilities). */
     protected final boolean DISABLE_SAVE_NEW_COUNTS = Boolean.getBoolean("jqf.ei.DISABLE_SAVE_NEW_COUNTS");
@@ -1190,7 +1187,7 @@ public class ZestGuidance implements Guidance {
         public abstract void writeTo(BufferedOutputStream out) throws IOException;
     }
 
-    public class LinearInput extends Input<Integer> {
+    public static class LinearInput extends Input<Integer> {
 
         /** A list of byte values (0-255) ordered by their index. */
         protected ByteArrayList values;
@@ -1611,50 +1608,18 @@ public class ZestGuidance implements Guidance {
         }
     }
 
-    public class SeedInput extends LinearInput {
+    public static class SeedInput extends LinearInput {
         final File seedFile;
-        final InputStream in;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
-            this.in = new BufferedInputStream(new FileInputStream(seedFile));
+            BufferedInputStream in = new BufferedInputStream(new FileInputStream(seedFile));
+            byte[] dat = in.readAllBytes();
+            in.close();
+            this.values = new ByteArrayList(dat);
+            this.dirty = true;
             this.desc = "seed";
-        }
-
-        @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
-            int value;
-            try {
-                value = in.read();
-            } catch (IOException e) {
-                throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
-
-            }
-
-            // assert (key == values.size())
-            if (key != values.size() && value != -1) {
-                throw new IllegalStateException(String.format("Bytes from seed out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            if (value >= 0) {
-                requested++;
-                values.add((byte) value);
-            }
-
-            // If value is -1, then it is returned (as EOF) but not added to the list
-            return value;
-        }
-
-        @Override
-        public void gc() {
-            super.gc();
-            try {
-                in.close();
-            } catch (IOException e) {
-                throw new GuidanceException("Error closing seed file:" + seedFile.getName(), e);
-            }
         }
 
     }
