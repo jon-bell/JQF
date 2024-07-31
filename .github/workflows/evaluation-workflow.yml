@@ -15,7 +15,7 @@ on:
       report_on_branches:
         description: Other branches to include in the report
         required: false
-        default: ci,fuzz-ir
+        default: ci,fuzz-ir,fuzz-ir-performance,input-as-bytearraylist
         type: string
       fuzzer_to_invoke:
         description: Path to script to invoke for fuzzing run, defaults to ./bin/jqf-zest

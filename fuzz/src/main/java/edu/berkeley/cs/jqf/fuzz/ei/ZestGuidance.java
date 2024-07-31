@@ -29,17 +29,8 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Console;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -58,6 +49,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -639,21 +631,7 @@ public class ZestGuidance implements Guidance {
      */
     protected InputStream createParameterStream() {
         // Return an input stream that reads bytes from a linear array
-        return new InputStream() {
-            int bytesRead = 0;
-
-            @Override
-            public int read() throws IOException {
-                assert currentInput instanceof LinearInput : "ZestGuidance should only mutate LinearInput(s)";
-
-                // For linear inputs, get with key = bytesRead (which is then incremented)
-                LinearInput linearInput = (LinearInput) currentInput;
-                // Attempt to get a value from the list, or else generate a random value
-                int ret = linearInput.getOrGenerateFresh(bytesRead++, random);
-                // infoLog("read(%d) = %d", bytesRead, ret);
-                return ret;
-            }
-        };
+        return new TypedInputStream((LinearInput) currentInput, random);
     }
 
     @Override
@@ -1234,8 +1212,254 @@ public class ZestGuidance implements Guidance {
             this.parent = other;
         }
 
-        @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
+        public double getOrGenerateFreshDouble(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Double.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Double.ordinal());
+                    double value = random.nextDouble();
+                    long bits = Double.doubleToLongBits(value);
+                    this.set(key + 1, (byte) (bits >> 56));
+                    this.set(key + 2, (byte) (bits >> 48));
+                    this.set(key + 3, (byte) (bits >> 40));
+                    this.set(key + 4, (byte) (bits >> 32));
+                    this.set(key + 5, (byte) (bits >> 24));
+                    this.set(key + 6, (byte) (bits >> 16));
+                    this.set(key + 7, (byte) (bits >> 8));
+                    this.set(key + 8, (byte) bits);
+                    return value;
+                } else {
+                    int b1 = this.get(key + 1);
+                    int b2 = this.get(key + 2);
+                    int b3 = this.get(key + 3);
+                    int b4 = this.get(key + 4);
+                    int b5 = this.get(key + 5);
+                    int b6 = this.get(key + 6);
+                    int b7 = this.get(key + 7);
+                    int b8 = this.get(key + 8);
+                    long bits = ((long) b1 << 56) | ((long) b2 << 48) | ((long) b3 << 40) | ((long) b4 << 32) | ((long) b5 << 24) | ((long) b6 << 16) | ((long) b7 << 8) | ((long) b8);
+                    double value = Double.longBitsToDouble(bits);
+                    if (value < 0)
+                        throw new GuidanceException("Negative double value");
+                    return value;
+                }
+            } else {
+                double value = random.nextDouble();
+                this.add((byte) TypedInputStream.Type.Double.ordinal());
+                long bits = Double.doubleToLongBits(value);
+                this.add((byte) (bits >> 56));
+                this.add((byte) (bits >> 48));
+                this.add((byte) (bits >> 40));
+                this.add((byte) (bits >> 32));
+                this.add((byte) (bits >> 24));
+                this.add((byte) (bits >> 16));
+                this.add((byte) (bits >> 8));
+                this.add((byte) bits);
+                this.addPaddingFor(TypedInputStream.Type.Double);
+                if(value < 0)
+                    throw new GuidanceException("Negative double value");
+
+                return value;
+            }
+        }
+        public long getOrGenerateFreshLong(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Long.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Long.ordinal());
+                }
+                int b1 = this.get(key + 1);
+                int b2 = this.get(key + 2);
+                int b3 = this.get(key + 3);
+                int b4 = this.get(key + 4);
+                int b5 = this.get(key + 5);
+                int b6 = this.get(key + 6);
+                int b7 = this.get(key + 7);
+                int b8 = this.get(key + 8);
+                long value = ((long) (b1 & 0xff) << 56) |
+                        ((long) (b2 & 0xff) << 48) |
+                        ((long) (b3 & 0xff) << 40) |
+                        ((long) (b4 & 0xff) << 32) |
+                        ((long) (b5 & 0xff) << 24) |
+                        ((long) (b6 & 0xff) << 16) |
+                        ((long) (b7 & 0xff) << 8) |
+                        ((long) b8);
+                return value;
+            } else {
+                long value = random.nextLong();
+                this.add((byte) TypedInputStream.Type.Long.ordinal());
+                this.add((byte) (value >> 56));
+                this.add((byte) (value >> 48));
+                this.add((byte) (value >> 40));
+                this.add((byte) (value >> 32));
+                this.add((byte) (value >> 24));
+                this.add((byte) (value >> 16));
+                this.add((byte) (value >> 8));
+                this.add((byte) value);
+                this.addPaddingFor(TypedInputStream.Type.Long);
+                return value;
+            }
+        }
+        public int getOrGenerateFreshInt(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Integer.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Integer.ordinal());
+                }
+                int b1 = this.get(key + 1);
+                int b2 = this.get(key + 2);
+                int b3 = this.get(key + 3);
+                int b4 = this.get(key + 4);
+                int value = ((b1 & 0xFF) << 24) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 8) | (b4 & 0xFF);
+                return value;
+            } else {
+                int value = random.nextInt();
+                this.add((byte) TypedInputStream.Type.Integer.ordinal());
+                this.add((byte) (value >> 24));
+                this.add((byte) (value >> 16));
+                this.add((byte) (value >> 8));
+                this.add((byte) value);
+                this.addPaddingFor(TypedInputStream.Type.Integer);
+
+                return value;
+            }
+        }
+        public byte getOrGenerateFreshByte(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Byte.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Byte.ordinal());
+                }
+                int value = this.get(key + 1);
+                return (byte) value;
+            } else {
+                int value = random.nextInt(256);
+                this.add((byte) TypedInputStream.Type.Byte.ordinal());
+                this.add((byte) value);
+                this.addPaddingFor(TypedInputStream.Type.Byte);
+
+                return (byte) value;
+            }
+        }
+        public char getOrGenerateFreshChar(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Char.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Char.ordinal());
+                }
+                int b1 = this.get(key + 1);
+                int b2 = this.get(key + 2);
+                char value = (char) ((b1 << 8) | (b2 & 0xFF));
+                return value;
+            } else {
+                char value = (char) random.nextInt();
+                this.add((byte) TypedInputStream.Type.Char.ordinal());
+                this.add((byte) (value >> 8));
+                this.add((byte) value);
+                this.addPaddingFor(TypedInputStream.Type.Char);
+
+                return value;
+            }
+        }
+        public int getOrGenerateFreshFloat(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Float.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Float.ordinal());
+                }
+                int b1 = this.get(key + 1);
+                int b2 = this.get(key + 2);
+                int b3 = this.get(key + 3);
+                int b4 = this.get(key + 4);
+                int value = ((b1 & 0xFF) << 24) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 8) | (b4 & 0xFF);
+                return value;
+            } else {
+                float value = random.nextFloat();
+                int bits = Float.floatToIntBits(value);
+                this.add((byte) TypedInputStream.Type.Float.ordinal());
+                this.add((byte) (bits >> 24));
+                this.add((byte) (bits >> 16));
+                this.add((byte) (bits >> 8));
+                this.add((byte) bits);
+                this.addPaddingFor(TypedInputStream.Type.Float);
+
+                return bits;
+            }
+        }
+        public short getOrGenerateFreshShort(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Short.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Short.ordinal());
+                }
+                int b1 = this.get(key + 1);
+                int b2 = this.get(key + 2);
+                short value = (short) ((b1 << 8) | (b2 & 0xFF));
+                return value;
+            } else {
+                short value = (short) random.nextInt();
+                this.add((byte) TypedInputStream.Type.Short.ordinal());
+                this.add((byte) (value >> 8));
+                this.add((byte) value);
+                this.addPaddingFor(TypedInputStream.Type.Short);
+
+                return value;
+            }
+        }
+        public boolean getOrGenerateFreshBoolean(int key, Random random){
+            checkGetRequest(key);
+            key = key * 9;
+
+            requested++;
+            if(key < this.size()){
+                int marker = this.get(key);
+                if(marker != TypedInputStream.Type.Boolean.ordinal()){
+                    this.set(key, (byte) TypedInputStream.Type.Boolean.ordinal());
+                }
+                int value = this.get(key + 1);
+                return value != 0;
+            } else {
+                boolean value = random.nextBoolean();
+                this.add((byte) TypedInputStream.Type.Boolean.ordinal());
+                this.add((byte) (value ? 1 : 0));
+                this.addPaddingFor(TypedInputStream.Type.Boolean);
+                return value;
+            }
+        }
+        private void addPaddingFor(TypedInputStream.Type type){
+            int bytesNeeeded = 8 - type.bytes;
+            for(int i = 0; i < bytesNeeeded; i++){
+                this.add((byte) 0);
+            }
+        }
+        private void checkGetRequest(int key) {
             // Otherwise, make sure we are requesting just beyond the end-of-list
             // assert (key == values.size());
             if (key != requested) {
@@ -1245,27 +1469,12 @@ public class ZestGuidance implements Guidance {
 
             // Don't generate over the limit
             if (requested >= MAX_INPUT_SIZE) {
-                return -1;
+                throw new IllegalStateException(new EOFException("Input too large"));
             }
-
-            // If it exists in the list, return it
-            if (key < this.size()) {
-                requested++;
-                // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                return this.get(key);
-            }
-
-            // Handle end of stream
-            if (GENERATE_EOF_WHEN_OUT) {
-                return -1;
-            } else {
-                // Just generate a random input
-                int val = random.nextInt(256);
-                this.add((byte) val);
-                requested++;
-                // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
-                return val;
-            }
+        }
+        @Override
+        public int getOrGenerateFresh(Integer key, Random random) {
+            throw new UnsupportedOperationException("Use specialized getOrGenerateFresh methods only");
         }
 
         private void add(byte b) {
@@ -1321,8 +1530,13 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            byte[] newValues = new byte[requested];
-            System.arraycopy(values.toArray(), 0, newValues, 0, requested);
+            if(this.size() == requested * 9)
+                return;
+            if(this.size() % 9 != 0){
+                throw new IllegalStateException("Size of input is not a multiple of 9");
+            }
+            byte[] newValues = new byte[requested * 9];
+            System.arraycopy(values.toArray(), 0, newValues, 0, requested * 9);
             values = new ByteArrayList(newValues);
 
             // Inputs should not be empty, otherwise mutations don't work
@@ -1337,29 +1551,54 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, MEAN_MUTATION_COUNT);
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, this.size() * 0.1));
             newInput.desc += ",havoc:"+numMutations;
 
             boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
-
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(newInput.size());
-                int mutationSize = sampleGeometric(random, MEAN_MUTATION_SIZE);
+                int offset = random.nextInt(this.requested) * 9;
+                TypedInputStream.Type typeAtOffset = TypedInputStream.Type.values()[newInput.get(offset)];
 
                 // desc += String.format(":%d@%d", mutationSize, idx);
 
-                // Mutate a contiguous set of bytes from offset
-                for (int i = offset; i < offset + mutationSize; i++) {
-                    // Don't go past end of list
-                    if (i >= newInput.size()) {
+                // Otherwise, apply a random mutation
+                switch (typeAtOffset) {
+                    case Boolean:
+                        newInput.set(offset + 1, random.nextBoolean() ? (byte) 1 : (byte) 0);
                         break;
-                    }
+                    case Double:
+                        double newValue = random.nextDouble();
+                        long bits = Double.doubleToLongBits(newValue);
+                        if(setToZero){
+                            bits = 0;
+                        }
+                        newInput.set(offset + 1, (byte) (bits >> 56));
+                        newInput.set(offset + 2, (byte) (bits >> 48));
+                        newInput.set(offset + 3, (byte) (bits >> 40));
+                        newInput.set(offset + 4, (byte) (bits >> 32));
+                        newInput.set(offset + 5, (byte) (bits >> 24));
+                        newInput.set(offset + 6, (byte) (bits >> 16));
+                        newInput.set(offset + 7, (byte) (bits >> 8));
+                        newInput.set(offset + 8, (byte) bits);
+                        break;
+                    case Float:
+                        float newFValue = random.nextFloat();
+                        int fbits = Float.floatToIntBits(newFValue);
+                        if(setToZero){
+                            fbits = 0;
+                        }
+                        newInput.set(offset + 1, (byte) (fbits >> 24));
+                        newInput.set(offset + 2, (byte) (fbits >> 16));
+                        newInput.set(offset + 3, (byte) (fbits >> 8));
+                        newInput.set(offset + 4, (byte) fbits);
+                        break;
 
-                    // Otherwise, apply a random mutation
-                    int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                    newInput.set(i, (byte) mutatedValue);
+                    default:
+                        for (int i = 0; i < typeAtOffset.bytes; i++) {
+                            newInput.set(offset + 1 + i, setToZero ? 0 : (byte) random.nextInt(256));
+                        }
                 }
             }
 
