@@ -1628,8 +1628,15 @@ public class ZestGuidance implements Guidance {
                     case Byte:
                         newInput.set(offset + 1, setToZero ? 0 : (byte) random.nextInt(256));
                         break;
-                        case Short:
-                           throw new GuidanceException("Short type not supported");
+                    case Short:
+                        if (setToZero) {
+                            newInput.set(offset + 1, (byte) 0);
+                            newInput.set(offset + 2, (byte) 0);
+                        } else {
+                            newInput.set(offset + 1, (byte) random.nextInt(256));
+                            newInput.set(offset + 2, (byte) random.nextInt(256));
+                        }
+                        break;
                     case Integer:
                         int newIValue = random.nextInt();
                         if(setToZero){
