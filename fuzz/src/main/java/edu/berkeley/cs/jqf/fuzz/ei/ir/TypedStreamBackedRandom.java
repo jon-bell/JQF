@@ -28,13 +28,7 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
             throw new GuidanceException(e);
         }
     }
-    public char nextChar() {
-        try {
-            return inputStream.readChar();
-        } catch(IOException e){
-            throw new GuidanceException(e);
-        }
-    }
+
     public int nextInt() {
         try {
             return inputStream.readInt();

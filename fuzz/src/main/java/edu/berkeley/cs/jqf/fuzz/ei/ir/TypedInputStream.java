@@ -21,7 +21,6 @@ public class TypedInputStream extends InputStream {
         Long(8),
         Byte(1),
         Boolean(1),
-        Char(2),
         Float(4),
         Short(2);
 
@@ -74,10 +73,6 @@ public class TypedInputStream extends InputStream {
 
     public boolean readBoolean() throws IOException {
         return input.getOrGenerateFreshBoolean(bytesRead++, random);
-    }
-
-    public char readChar() throws IOException {
-        return input.getOrGenerateFreshChar(bytesRead++, random);
     }
 
     public float readFloat() throws IOException {

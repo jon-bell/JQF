@@ -1270,6 +1270,16 @@ public class ZestGuidance implements Guidance {
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Long.ordinal()){
                     this.set(key, (byte) TypedInputStream.Type.Long.ordinal());
+                    long value = random.nextLong();
+                    this.set(key + 1, (byte) (value >> 56));
+                    this.set(key + 2, (byte) (value >> 48));
+                    this.set(key + 3, (byte) (value >> 40));
+                    this.set(key + 4, (byte) (value >> 32));
+                    this.set(key + 5, (byte) (value >> 24));
+                    this.set(key + 6, (byte) (value >> 16));
+                    this.set(key + 7, (byte) (value >> 8));
+                    this.set(key + 8, (byte) value);
+                    return value;
                 }
                 int b1 = this.get(key + 1);
                 int b2 = this.get(key + 2);
@@ -1313,6 +1323,12 @@ public class ZestGuidance implements Guidance {
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Integer.ordinal()){
                     this.set(key, (byte) TypedInputStream.Type.Integer.ordinal());
+                    int value = random.nextInt();
+                    this.set(key + 1, (byte) (value >> 24));
+                    this.set(key + 2, (byte) (value >> 16));
+                    this.set(key + 3, (byte) (value >> 8));
+                    this.set(key + 4, (byte) value);
+                    return value;
                 }
                 int b1 = this.get(key + 1);
                 int b2 = this.get(key + 2);
@@ -1342,6 +1358,9 @@ public class ZestGuidance implements Guidance {
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Byte.ordinal()){
                     this.set(key, (byte) TypedInputStream.Type.Byte.ordinal());
+                    byte value = (byte) random.nextInt();
+                    this.set(key + 1, value);
+                    return value;
                 }
                 int value = this.get(key + 1);
                 return (byte) value;
@@ -1354,31 +1373,31 @@ public class ZestGuidance implements Guidance {
                 return (byte) value;
             }
         }
-        public char getOrGenerateFreshChar(int key, Random random){
-            checkGetRequest(key);
-            key = key * 9;
-
-            bytesRead +=2;
-            numRequests++;
-            if(key < this.size()){
-                int marker = this.get(key);
-                if(marker != TypedInputStream.Type.Char.ordinal()){
-                    this.set(key, (byte) TypedInputStream.Type.Char.ordinal());
-                }
-                int b1 = this.get(key + 1);
-                int b2 = this.get(key + 2);
-                char value = (char) ((b1 << 8) | (b2 & 0xFF));
-                return value;
-            } else {
-                char value = (char) random.nextInt();
-                this.add((byte) TypedInputStream.Type.Char.ordinal());
-                this.add((byte) (value >> 8));
-                this.add((byte) value);
-                this.addPaddingFor(TypedInputStream.Type.Char);
-
-                return value;
-            }
-        }
+//        public char getOrGenerateFreshChar(int key, Random random){
+//            checkGetRequest(key);
+//            key = key * 9;
+//
+//            bytesRead +=2;
+//            numRequests++;
+//            if(key < this.size()){
+//                int marker = this.get(key);
+//                if(marker != TypedInputStream.Type.Char.ordinal()){
+//                    this.set(key, (byte) TypedInputStream.Type.Char.ordinal());
+//                }
+//                int b1 = this.get(key + 1);
+//                int b2 = this.get(key + 2);
+//                char value = (char) ((b1 << 8) | (b2 & 0xFF));
+//                return value;
+//            } else {
+//                char value = (char) random.nextInt();
+//                this.add((byte) TypedInputStream.Type.Char.ordinal());
+//                this.add((byte) (value >> 8));
+//                this.add((byte) value);
+//                this.addPaddingFor(TypedInputStream.Type.Char);
+//
+//                return value;
+//            }
+//        }
         public int getOrGenerateFreshFloat(int key, Random random){
             checkGetRequest(key);
             key = key * 9;
@@ -1389,6 +1408,13 @@ public class ZestGuidance implements Guidance {
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Float.ordinal()){
                     this.set(key, (byte) TypedInputStream.Type.Float.ordinal());
+                    float value = random.nextFloat();
+                    int bits = Float.floatToIntBits(value);
+                    this.set(key + 1, (byte) (bits >> 24));
+                    this.set(key + 2, (byte) (bits >> 16));
+                    this.set(key + 3, (byte) (bits >> 8));
+                    this.set(key + 4, (byte) bits);
+                    return bits;
                 }
                 int b1 = this.get(key + 1);
                 int b2 = this.get(key + 2);
@@ -1444,6 +1470,9 @@ public class ZestGuidance implements Guidance {
                 int marker = this.get(key);
                 if(marker != TypedInputStream.Type.Boolean.ordinal()){
                     this.set(key, (byte) TypedInputStream.Type.Boolean.ordinal());
+                    boolean value = random.nextBoolean();
+                    this.set(key + 1, (byte) (value ? 1 : 0));
+                    return value;
                 }
                 int value = this.get(key + 1);
                 return value != 0;
@@ -1596,11 +1625,37 @@ public class ZestGuidance implements Guidance {
                         newInput.set(offset + 3, (byte) (fbits >> 8));
                         newInput.set(offset + 4, (byte) fbits);
                         break;
-
-                    default:
-                        for (int i = 0; i < typeAtOffset.bytes; i++) {
-                            newInput.set(offset + 1 + i, setToZero ? 0 : (byte) random.nextInt(256));
+                    case Byte:
+                        newInput.set(offset + 1, setToZero ? 0 : (byte) random.nextInt(256));
+                        break;
+                        case Short:
+                           throw new GuidanceException("Short type not supported");
+                    case Integer:
+                        int newIValue = random.nextInt();
+                        if(setToZero){
+                            newIValue = 0;
                         }
+                        newInput.set(offset + 1, (byte) (newIValue >> 24));
+                        newInput.set(offset + 2, (byte) (newIValue >> 16));
+                        newInput.set(offset + 3, (byte) (newIValue >> 8));
+                        newInput.set(offset + 4, (byte) newIValue);
+                        break;
+                    case Long:
+                        long newLValue = random.nextLong();
+                        if(setToZero){
+                            newLValue = 0;
+                        }
+                        newInput.set(offset + 1, (byte) (newLValue >> 56));
+                        newInput.set(offset + 2, (byte) (newLValue >> 48));
+                        newInput.set(offset + 3, (byte) (newLValue >> 40));
+                        newInput.set(offset + 4, (byte) (newLValue >> 32));
+                        newInput.set(offset + 5, (byte) (newLValue >> 24));
+                        newInput.set(offset + 6, (byte) (newLValue >> 16));
+                        newInput.set(offset + 7, (byte) (newLValue >> 8));
+                        newInput.set(offset + 8, (byte) newLValue);
+                        break;
+                    default:
+                        throw new GuidanceException("Malformed input: invalid type");
                 }
             }
 
@@ -1609,7 +1664,9 @@ public class ZestGuidance implements Guidance {
 
         @Override
         public void writeTo(BufferedOutputStream out) throws IOException {
-            out.write(this.values.toArray());
+            for(int i = 0; i < this.size(); i++){
+                out.write(this.get(i));
+            }
         }
     }
 
