@@ -22,8 +22,8 @@ class="$1"
 method="$2"
 JACOCO_JAR=$ROOT_DIR/target/jacocoagent.jar
 if [ ! -f $JACOCO_JAR ]; then
-  mvn -q dependency:copy -Dartifact=org.jacoco:org.jacoco.agent:0.8.7 -DoutputDirectory=$ROOT_DIR/target/
-  (cd $ROOT_DIR/target && unzip org.jacoco.agent-0.8.7.jar)
+  mvn -q dependency:copy -Dartifact=org.jacoco:org.jacoco.agent:0.8.10 -DoutputDirectory=$ROOT_DIR/target/
+  (cd $ROOT_DIR/target && unzip org.jacoco.agent-0.8.10.jar)
 fi
 
 echo $JACOCO_JAR
@@ -31,5 +31,7 @@ echo $JACOCO_JAR
 export CLASSPATH="$ROOT_DIR/examples/target/classes/:$ROOT_DIR/examples/target/test-classes/:$ROOT_DIR/examples/target/dependency/*"
 export JVM_OPTS="-javaagent:$JACOCO_JAR=destfile=$3,includes=$4"
 
-"$ROOT_DIR/bin/jqf-repro" $args "$class" "$method" "${@:5}"
+echo $JVM_OPTS
 echo "$ROOT_DIR/bin/jqf-repro" $args "$class" "$method" "${@:5}"
+
+"$ROOT_DIR/bin/jqf-repro" $args "$class" "$method" "${@:5}"
