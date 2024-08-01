@@ -4,5 +4,5 @@ jobs:
   evaluate:
     uses: ./.github/workflows/evaluation-workflow.yml
     with:
-      duration: 10m
-      trials: 5
+      duration: 1m
+      trials: 2

@@ -251,6 +251,7 @@ jobs:
             bash scripts/experiments/get_coverage.sh jacoco.exec "$coveragePackages" jacoco-$id
             JACOCO_SUMMARY+="\"${id}\": $(cat jacoco_summary.json),"
             mv jacoco_summary.json "$RESULTS_DIR/artifacts/${id}_jacoco_summary.json"
+            cp jacoco.exec "$RESULTS_DIR/artifacts/${id}_jacoco.exec"
             cp -r jacoco-$id "$RESULTS_DIR/"
           done
           JACOCO_SUMMARY+='"site_url":"$BASE_URL"}'
