@@ -6,6 +6,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Random;
 
 public abstract class TypedGeneratedValue implements Serializable {
@@ -16,7 +17,16 @@ public abstract class TypedGeneratedValue implements Serializable {
         Type type = Type.valueOf(dis.readUTF());
         switch (type) {
             case String:
-                return new StringValue(dis.readUTF());
+                String val = dis.readUTF();
+                int dictSize = dis.readInt();
+                List<String> dictionary = null;
+                if(dictSize > 0){
+                    dictionary = new java.util.ArrayList<>();
+                    for (int i = 0; i < dictSize; i++) {
+                        dictionary.add(dis.readUTF());
+                    }
+                }
+                return new StringValue(val, dictionary);
             case Integer:
                 return new IntegerValue(dis.readInt());
             case Float:
@@ -43,7 +53,16 @@ public abstract class TypedGeneratedValue implements Serializable {
             out.writeUTF(type.toString());
             switch (type) {
                 case String:
-                    out.writeUTF(((StringValue) this).value);
+                    StringValue _this = (StringValue) this;
+                    out.writeUTF(_this.value);
+                    if(_this.dictionary != null){
+                        out.writeInt(_this.dictionary.size());
+                        for (String s : _this.dictionary) {
+                            out.writeUTF(s);
+                        }
+                    } else {
+                        out.writeInt(-1);
+                    }
                     break;
                 case Integer:
                     out.writeInt(((IntegerValue) this).value);
@@ -78,16 +97,24 @@ public abstract class TypedGeneratedValue implements Serializable {
     public enum Type {
         String, Integer, Float, Boolean, Byte, Long, Double, Short, Char;
     }
-
-    public static TypedGeneratedValue generate(Type desiredType, Random random) {
+    private static final int MAX_STRING_LENGTH = 20;
+    public static TypedGeneratedValue generateString(Random random, List<String> dictionary){
+        boolean useDictionary = random.nextBoolean();
+        if(useDictionary){
+            return new StringValue(dictionary.get(random.nextInt(dictionary.size())), dictionary);
+        } else {
+            int length = random.nextInt(20);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < length; i++) {
+                sb.append((char) random.nextInt(55295));
+            }
+            return new StringValue(sb.toString(), dictionary);
+        }
+    }
+    public static TypedGeneratedValue generate(Type desiredType, Random random, List<String> dictionary) {
         switch (desiredType) {
             case String:
-                int length = random.nextInt(10);
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < length; i++) {
-                    sb.append((char) random.nextInt(55295));
-                }
-                return new StringValue(sb.toString());
+                return generateString(random, dictionary);
             case Integer:
                 return new IntegerValue(random.nextInt());
             case Float:
@@ -111,64 +138,38 @@ public abstract class TypedGeneratedValue implements Serializable {
         this.type = type;
     }
 
-    public abstract void mutate(Random random, boolean setToZero);
-
     public static class ShortValue extends TypedGeneratedValue {
-        public short value;
+        public final short value;
 
         public ShortValue(short value) {
             super(Type.Short);
             this.value = value;
         }
 
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-            value = (short) (random.nextInt(2 * Short.MAX_VALUE) - Short.MAX_VALUE);
-        }
     }
 
     public static class CharValue extends TypedGeneratedValue {
-        public char value;
+        public final char value;
 
         public CharValue(char value) {
             super(Type.Char);
             this.value = value;
         }
 
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-            value = (char) (random.nextInt(2 * Character.MAX_VALUE) - Character.MAX_VALUE);
-        }
     }
 
     public static class LongValue extends TypedGeneratedValue {
-        public long value;
+        public final long value;
 
         public LongValue(long value) {
             super(Type.Long);
             this.value = value;
         }
 
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-            value = random.nextLong();
-        }
     }
 
     public static class DoubleValue extends TypedGeneratedValue {
-        public double value;
+        public final double value;
 
         public DoubleValue(double value) {
             super(Type.Double);
@@ -182,120 +183,54 @@ public abstract class TypedGeneratedValue implements Serializable {
                     '}';
         }
 
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-//            value = Double.longBitsToDouble(random.nextLong());
-            value = random.nextDouble();
-        }
     }
 
     public static class StringValue extends TypedGeneratedValue {
-        public String value;
+        public final String value;
+        public final List<String> dictionary;
 
-        public StringValue(String value) {
+        public StringValue(String value, List<String> dictionary) {
             super(Type.String);
             this.value = value;
-        }
-
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = "";
-                return;
-            }
-            int index = random.nextInt(value.length());
-            byte[] chars = value.getBytes();
-            chars[index] = (byte) random.nextInt(255);
-            value = new String(chars);
+            this.dictionary = dictionary;
         }
     }
 
     public static class IntegerValue extends TypedGeneratedValue {
-        public int value;
-        public int bound;
+        public final int value;
 
         public IntegerValue(int value) {
             super(Type.Integer);
             this.value = value;
         }
-
-        public IntegerValue(int value, int bound) {
-            super(Type.Integer);
-            this.value = value;
-            this.bound = bound;
-        }
-
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-            if (bound != 0) {
-                value = random.nextInt(bound);
-            } else {
-                value = random.nextInt();
-            }
-        }
     }
 
     public static class FloatValue extends TypedGeneratedValue {
-        public float value;
+        public final float value;
 
         public FloatValue(float value) {
             super(Type.Float);
             this.value = value;
         }
-
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-//            value = Float.intBitsToFloat(random.nextInt());
-            value = random.nextFloat();
-        }
     }
 
     public static class BooleanValue extends TypedGeneratedValue {
-        public boolean value;
+        public final boolean value;
 
         public BooleanValue(boolean value) {
             super(Type.Boolean);
             this.value = value;
         }
-
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = false;
-                return;
-            }
-            value = random.nextBoolean();
-        }
     }
 
     public static class ByteValue extends TypedGeneratedValue {
-        public byte value;
+        public final byte value;
 
         public ByteValue(byte value) {
             super(Type.Byte);
             this.value = value;
         }
 
-        @Override
-        public void mutate(Random random, boolean setToZero) {
-            if (setToZero) {
-                value = 0;
-                return;
-            }
-            value = (byte) random.nextInt();
-        }
     }
 }
 

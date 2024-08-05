@@ -6,17 +6,37 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class TypedInputStream extends InputStream {
     private Random random;
     private ZestGuidance.LinearInput input;
     private int bytesRead = 0;
+    private int positionInInput;
 
+    /*
+    Plan:
+    1. Migrate reading into this class from ZestGuidance.LinearInput
+    2. Track "position" separately from bytesRead, allows for skipping
+    3. Add skip-ahead functionality
+    4. Add string nodes
+     */
     public TypedInputStream(ZestGuidance.LinearInput input, Random random) {
         super();
         this.input = input;
         this.random = random;
+    }
+
+    private void checkForEOFAndIncrement() throws IOException {
+        if (positionInInput >= input.size()) {
+            if(ZestGuidance.GENERATE_EOF_WHEN_OUT){
+                throw new IllegalStateException(new EOFException("Reached end of input stream"));
+            }
+        }
+        if(bytesRead > ZestGuidance.MAX_INPUT_SIZE)
+            throw new IllegalStateException(new EOFException("Input too large"));
+        positionInInput++;
     }
 
     @Override
@@ -24,53 +44,109 @@ public class TypedInputStream extends InputStream {
         throw new IOException("TypedInputStream does not support read()");
     }
 
-    public TypedGeneratedValue readValue(TypedGeneratedValue.Type desiredType) throws IOException {
-        TypedGeneratedValue ret = input.getOrGenerateFresh(bytesRead++, desiredType, random);
-        return ret;
-    }
-
     public double readDouble() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Double);
+        bytesRead += 8;
         return ((TypedGeneratedValue.DoubleValue) ret).value;
     }
 
     public long readLong() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Long);
+        bytesRead += 8;
         return ((TypedGeneratedValue.LongValue) ret).value;
     }
 
     public int readInt() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Integer);
+        bytesRead += 4;
         return ((TypedGeneratedValue.IntegerValue) ret).value;
     }
 
     public byte readByte() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Byte);
+        bytesRead++;
         return ((TypedGeneratedValue.ByteValue) ret).value;
     }
 
     public boolean readBoolean() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Boolean);
+        bytesRead++;
         return ((TypedGeneratedValue.BooleanValue) ret).value;
     }
 
-    public String readString() throws IOException {
-        TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.String);
+    public String readString(List<String> dictionary) throws IOException {
+        checkForEOFAndIncrement();
+        TypedGeneratedValue ret = readStringValue(dictionary);
+        bytesRead+=4; //Historically JQF has counted strings as 4 bytes (an int into a dictionary)
         return ((TypedGeneratedValue.StringValue) ret).value;
     }
 
     public char readChar() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Char);
+        bytesRead += 2;
         return ((TypedGeneratedValue.CharValue) ret).value;
     }
 
     public float readFloat() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Float);
+        bytesRead += 4;
         return ((TypedGeneratedValue.FloatValue) ret).value;
     }
 
     public short readShort() throws IOException {
+        checkForEOFAndIncrement();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Short);
+        bytesRead += 2;
         return ((TypedGeneratedValue.ShortValue) ret).value;
     }
+
+    private static final int SCAN_FORWARD_LIMIT = 20;
+    private TypedGeneratedValue readStringValue(List<String> dictionary){
+        return _readValueInternal(TypedGeneratedValue.Type.String, dictionary);
+    }
+    private TypedGeneratedValue readValue(TypedGeneratedValue.Type type) {
+        return _readValueInternal(type, null);
+    }
+    private TypedGeneratedValue _readValueInternal(TypedGeneratedValue.Type type, List<String> dictionary){
+        if(positionInInput < input.size()){
+            TypedGeneratedValue ret = input.get(positionInInput);
+            if(ret.type == type){
+                return ret;
+            }
+            else {
+                // Scan forward for the next value of the correct type
+                input.misAlignments++;
+                for(int i = 1; i < SCAN_FORWARD_LIMIT; i++){
+                    if(positionInInput + i < input.size()){
+                        TypedGeneratedValue next = input.get(positionInInput + i);
+                        if(next.type == type){
+                            positionInInput += i;
+                            input.numAlignments++;
+                            return next;
+                        }
+                    }
+                }
+                // If we reach here, we didn't find a value of the correct type
+                // Generate a new value and insert it here in the input
+                // TODO consider instead replacing the next value? experiment?
+                ret = TypedGeneratedValue.generate(type, random, dictionary);
+                input.insert(positionInInput, ret);
+                return ret;
+            }
+        } else {
+            // We are at the end, generate a new value
+            TypedGeneratedValue ret = TypedGeneratedValue.generate(type, random, dictionary);
+            input.add(ret);
+            return ret;
+        }
+
+    }
+
 }

@@ -145,6 +145,11 @@ public class ZestGuidance implements Guidance {
      */
     protected int numSavedInputs = 0;
 
+    protected int numSavedInputsWithMisalignments = 0;
+    protected int numMisalignments = 0;
+    protected int numSavedAlignedInputs = 0;
+    protected int numAlignmentsInSavedInputs = 0;
+
     /** Coverage statistics for a single run. */
     protected ICoverage runCoverage = CoverageFactory.newInstance();
 
@@ -238,7 +243,7 @@ public class ZestGuidance implements Guidance {
     public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
-    protected static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
+    public static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
     /** Baseline number of mutated children to produce from a given parent input. */
     protected final int NUM_CHILDREN_BASELINE = 50;
@@ -418,7 +423,7 @@ public class ZestGuidance implements Guidance {
 
     protected String getStatNames() {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
-            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes";
+            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes,numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs";
     }
 
     /* Writes a line of text to a given log file. */
@@ -521,6 +526,8 @@ public class ZestGuidance implements Guidance {
                 console.printf("Cycles completed:     %d\n", cyclesCompleted);
                 console.printf("Unique failures:      %,d\n", uniqueFailures.size());
                 console.printf("Queue size:           %,d (%,d favored last cycle)\n", savedInputs.size(), numFavoredLastCycle);
+                console.printf("Misaligned inputs:    %d (avg %d/input)\n", numSavedInputsWithMisalignments, numSavedInputsWithMisalignments > 0 ? numMisalignments / numSavedInputsWithMisalignments: 0);
+                console.printf("Realigned inputs:     %d (avg %d/input)\n", numSavedAlignedInputs, numSavedAlignedInputs > 0 ? numAlignmentsInSavedInputs / numSavedAlignedInputs: 0);
                 console.printf("Current parent input: %s\n", currentParentInputDesc);
                 console.printf("Execution speed:      %,d/sec now | %,d/sec overall\n", intervalExecsPerSec, execsPerSec);
                 console.printf("Total coverage:       %,d branches (%.2f%% of map)\n", nonZeroCount, nonZeroFraction);
@@ -528,10 +535,10 @@ public class ZestGuidance implements Guidance {
             }
         }
 
-        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d",
+        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()), cyclesCompleted, currentParentInputIdx,
                 numSavedInputs, 0, 0, nonZeroFraction, uniqueFailures.size(), 0, 0, intervalExecsPerSecDouble,
-                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount);
+                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount, numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs);
         appendLineToFile(statsFile, plotData);
     }
 
@@ -750,6 +757,18 @@ public class ZestGuidance implements Guidance {
                     // libFuzzerCompat stats are only displayed when they hit new coverage
                     if (LIBFUZZER_COMPAT_OUTPUT) {
                         displayStats(false);
+                    }
+
+                    if(currentInput instanceof LinearInput){
+                        LinearInput linearInput = (LinearInput) currentInput;
+                        if(linearInput.misAlignments > 0){
+                            numSavedInputsWithMisalignments++;
+                            numMisalignments += linearInput.misAlignments;
+                        }
+                        if(linearInput.numAlignments > 0){
+                            numSavedAlignedInputs++;
+                            numAlignmentsInSavedInputs += linearInput.numAlignments;
+                        }
                     }
 
                     infoLog("Saving new input (at run %d): " +
@@ -1196,6 +1215,10 @@ public class ZestGuidance implements Guidance {
         /** The number of bytes requested so far */
         protected int requested = 0;
 
+        /** For stats **/
+        public int numAlignments;
+        public int misAlignments;
+
         public LinearInput() {
             super();
             this.values = new ArrayList<>();
@@ -1207,45 +1230,7 @@ public class ZestGuidance implements Guidance {
         }
 
         public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
-            // Otherwise, make sure we are requesting just beyond the end-of-list
-            // assert (key == values.size());
-            if (key != requested) {
-                throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            // Don't generate over the limit
-            if (requested >= MAX_INPUT_SIZE) {
-                throw new IllegalStateException(new EOFException("Input size limit exceeded"));
-            }
-
-            // If it exists in the list, return it
-            if (key < values.size()) {
-                requested++;
-                // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                TypedGeneratedValue ret = values.get(key);
-                // Check if the type is correct
-                if (ret.type == desired) {
-                    return ret;
-                } else{
-                    // If not, generate a new one and update the value in the list
-                    TypedGeneratedValue newVal = TypedGeneratedValue.generate(desired, random);
-                    values.set(key, newVal);
-                    return newVal;
-                }
-            }
-
-            // Handle end of stream
-            if (GENERATE_EOF_WHEN_OUT) {
-                throw new IllegalStateException(new EOFException("End of input stream"));
-            } else {
-                // Just generate a random input
-                TypedGeneratedValue val = TypedGeneratedValue.generate(desired, random);
-                values.add(val);
-                requested++;
-                // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
-                return val;
-            }
+            throw new UnsupportedOperationException("This really seems like it should be the responsibility of the input stream, not the input...");
         }
 
         @Override
@@ -1281,15 +1266,15 @@ public class ZestGuidance implements Guidance {
             int numMutations = sampleGeometric(random, Math.max(this.values.size() * 0.1, MEAN_MUTATION_COUNT));
             newInput.desc += ",havoc:"+numMutations;
 
-            boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
+//            boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
 
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
                 int offset = random.nextInt(newInput.values.size());
                 // desc += String.format(":%d@%d", mutationSize, idx);
-                TypedGeneratedValue.Type desired = newInput.values.get(offset).type;
-                newInput.values.set(offset, TypedGeneratedValue.generate(desired, random));
+                TypedGeneratedValue existing = newInput.values.get(offset);
+                newInput.values.set(offset, TypedGeneratedValue.generate(existing.type, random, existing instanceof TypedGeneratedValue.StringValue ? ((TypedGeneratedValue.StringValue) existing).dictionary : null));
             }
 
             return newInput;
@@ -1304,6 +1289,25 @@ public class ZestGuidance implements Guidance {
             out.writeInt(values.size());
             for (TypedGeneratedValue value : values) {
                 value.writeTo(out);
+            }
+        }
+
+        public TypedGeneratedValue get(int idx) {
+            if(idx > requested){
+                requested = idx;
+            }
+            return values.get(idx);
+        }
+
+        public void insert(int insertAt, TypedGeneratedValue val) {
+            values.add(insertAt, val);
+
+        }
+
+        public void add(TypedGeneratedValue val) {
+            values.add(val);
+            if(values.size() > requested){
+                requested = values.size();
             }
         }
     }

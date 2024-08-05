@@ -28,11 +28,13 @@
  */
 package edu.berkeley.cs.jqf.fuzz.junit.quickcheck;
 
+import java.util.List;
 import java.util.Random;
 
 import com.pholser.junit.quickcheck.internal.Ranges;
 import com.pholser.junit.quickcheck.internal.Ranges.Type;
 import com.pholser.junit.quickcheck.random.SourceOfRandomness;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedStreamBackedRandom;
 import edu.berkeley.cs.jqf.fuzz.guidance.StreamBackedRandom;
 
 /**
@@ -64,6 +66,9 @@ public class FastSourceOfRandomness extends SourceOfRandomness {
         return this.delegate;
     }
 
+    public String nextString(List<String> dictionary) {
+        return ((TypedStreamBackedRandom) delegate).nextString(dictionary);
+    }
     @Override
     public byte nextByte(byte min, byte max) {
         if (min == Byte.MIN_VALUE && max == Byte.MAX_VALUE) {

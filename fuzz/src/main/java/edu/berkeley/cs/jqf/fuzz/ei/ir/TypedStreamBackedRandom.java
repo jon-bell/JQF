@@ -4,6 +4,7 @@ import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.StreamBackedRandom;
 
 import java.io.IOException;
+import java.util.List;
 
 public class TypedStreamBackedRandom extends StreamBackedRandom {
     private TypedInputStream inputStream;
@@ -77,6 +78,14 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     public short nextShort() {
         try{
             return  inputStream.readShort();
+        } catch(IOException e){
+            throw new GuidanceException(e);
+        }
+    }
+
+    public String nextString(List<String> dictionary) {
+        try{
+            return inputStream.readString(dictionary);
         } catch(IOException e){
             throw new GuidanceException(e);
         }
