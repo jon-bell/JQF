@@ -7,6 +7,7 @@ import java.io.IOException;
 
 public class TypedStreamBackedRandom extends StreamBackedRandom {
     private TypedInputStream inputStream;
+    private boolean leadingBytesRead = false;
 
     public TypedStreamBackedRandom(TypedInputStream inputStream, int bytesToIgnore) {
         super(inputStream, bytesToIgnore);
@@ -46,6 +47,10 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     }
 
     public long nextLong() {
+        if(!leadingBytesRead){
+            leadingBytesRead = true;
+            return 0;
+        }
         try {
             return inputStream.readLong();
         } catch(IOException e){

@@ -1590,6 +1590,7 @@ public class ZestGuidance implements Guidance {
 
                 // Select a random offset and size
                 int offset = random.nextInt(this.numRequests) * 9;
+
                 TypedInputStream.Type typeAtOffset = TypedInputStream.Type.values()[newInput.get(offset)];
 
                 // desc += String.format(":%d@%d", mutationSize, idx);
