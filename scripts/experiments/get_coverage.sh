@@ -22,7 +22,7 @@ fi
 
 JACOCO_SOURCES=$ROOT_DIR/examples/target/dependency-sources
 if [ ! -d $JACOCO_SOURCES ]; then
-  (cd $ROOT_DIR/examples && mvn dependency:unpack-dependencies -Dclassifier=sources -DincludeArtifactIds=maven-model,closure-compiler,rhino,ant,bcel -DoutputDirectory=target/dependency-sources)
+  (cd $ROOT_DIR/examples && mvn -q dependency:unpack-dependencies -Dclassifier=sources -DincludeArtifactIds=maven-model,closure-compiler,rhino,ant,bcel -DoutputDirectory=target/dependency-sources)
 fi
 
 JACOCO_UTIL_JAR=$ROOT_DIR/target/jacoco-utils-1.0-SNAPSHOT.jar
@@ -31,6 +31,9 @@ if [ ! -f $JACOCO_UTIL_JAR ]; then
    mvn -q dependency:get -Dartifact=fun.jvm.jacoco:jacoco-utils:1.0-SNAPSHOT -DremoteRepositories=https://oss.sonatype.org/content/repositories/snapshots
    mvn -q dependency:copy -Dartifact=fun.jvm.jacoco:jacoco-utils:1.0-SNAPSHOT -DoutputDirectory=$ROOT_DIR/target/
 fi
+
+# Chocopy contains a copy of ant, so we need to exclude it when processing coverage for ant...
+rm -f $ROOT_DIR/examples/target/dependency/chocopy*
 
 export JACOCO_RUNNER_JAR=$ROOT_DIR/target/
 export CLASSPATH="$ROOT_DIR/examples/target/test-classes/"
