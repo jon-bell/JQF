@@ -74,7 +74,7 @@ jobs:
     env:
       JAVA_HOME: ${{ inputs.java_home }}
       RESULTS_DIR: /ci-logs/public/${{ github.repository }}/${{ github.sha }}/${{ github.workflow }}/${{ github.run_id }}/${{ github.run_attempt }}/artifacts
-      JVM_OPTS: -Dtime=${{ inputs.duration }} -Djqf.ei.QUIET_MODE=true -DZEST_STATS_REFRESH_TIME_PERIOD=60000 -DuseFastNonCollidingCoverageInstrumentation=true -Djqf.ei.MAX_FAILURES_REPORT=10 ${{ inputs.JVM_OPTS }}
+      JVM_OPTS: -Dtime=${{ inputs.duration }} -Djqf.ei.QUIET_MODE=true -DZEST_STATS_REFRESH_TIME_PERIOD=60000 -DuseFastNonCollidingCoverageInstrumentation=true -Djqf.ei.MAX_FAILURES_REPORT=10 ${{ inputs.JVM_OPTS }} -Xmx12g
       PROFILE_HEAP: ${{ inputs.PROFILE_HEAP }}
     strategy:
         matrix: ${{fromJson(needs.build-matrix.outputs.matrix-run)}}
