@@ -1248,8 +1248,10 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            values = new ArrayList<>(values.subList(0, requested));
-            values.trimToSize();
+            if(requested + 1 < values.size()) {
+                values = new ArrayList<>(values.subList(0, requested + 1));
+                values.trimToSize();
+            }
 
             // Inputs should not be empty, otherwise mutations don't work
             if (values.isEmpty()) {
@@ -1301,7 +1303,6 @@ public class ZestGuidance implements Guidance {
 
         public void insert(int insertAt, TypedGeneratedValue val) {
             values.add(insertAt, val);
-
         }
 
         public void add(TypedGeneratedValue val) {
@@ -1323,30 +1324,10 @@ public class ZestGuidance implements Guidance {
             this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
             this.valuesRemaining = this.in.readInt();
-        }
-
-        @Override
-        public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
-            TypedGeneratedValue value;
-            try {
-                value = TypedGeneratedValue.readOneValue(in);
-            } catch (IOException e) {
-                throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
-            }
-
-            // assert (key == values.size())
-            if (key != values.size() && value != null) {
-                throw new IllegalStateException(String.format("Bytes from seed out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            if (value != null) {
-                requested++;
+            for(int i = 0; i < valuesRemaining; i++){
+                TypedGeneratedValue value = TypedGeneratedValue.readOneValue(in);
                 values.add(value);
             }
-
-            // If value is null, then it is returned (as EOF) but not added to the list
-            return value;
         }
 
         @Override

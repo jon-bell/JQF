@@ -8,6 +8,7 @@ import java.util.List;
 
 public class TypedStreamBackedRandom extends StreamBackedRandom {
     private TypedInputStream inputStream;
+    private boolean firstLongHasBeenSkipped = false;
 
     public TypedStreamBackedRandom(TypedInputStream inputStream, int bytesToIgnore) {
         super(inputStream, bytesToIgnore);
@@ -53,6 +54,10 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     }
 
     public long nextLong() {
+        if(!firstLongHasBeenSkipped){
+            firstLongHasBeenSkipped = true;
+            return 0;
+        }
         try {
             return inputStream.readLong();
         } catch(IOException e){

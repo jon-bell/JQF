@@ -5,7 +5,6 @@ import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -28,7 +27,7 @@ public class TypedInputStream extends InputStream {
         this.random = random;
     }
 
-    private void checkForEOFAndIncrement() throws IOException {
+    private void checkForEOF() throws IOException {
         if (positionInInput >= input.size()) {
             if(ZestGuidance.GENERATE_EOF_WHEN_OUT){
                 throw new IllegalStateException(new EOFException("Reached end of input stream"));
@@ -36,7 +35,6 @@ public class TypedInputStream extends InputStream {
         }
         if(bytesRead > ZestGuidance.MAX_INPUT_SIZE)
             throw new IllegalStateException(new EOFException("Input too large"));
-        positionInInput++;
     }
 
     @Override
@@ -45,65 +43,74 @@ public class TypedInputStream extends InputStream {
     }
 
     public double readDouble() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Double);
         bytesRead += 8;
+        positionInInput++;
         return ((TypedGeneratedValue.DoubleValue) ret).value;
     }
 
     public long readLong() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Long);
         bytesRead += 8;
+        positionInInput++;
         return ((TypedGeneratedValue.LongValue) ret).value;
     }
 
     public int readInt() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Integer);
         bytesRead += 4;
+        positionInInput++;
         return ((TypedGeneratedValue.IntegerValue) ret).value;
     }
 
     public byte readByte() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Byte);
         bytesRead++;
+        positionInInput++;
         return ((TypedGeneratedValue.ByteValue) ret).value;
     }
 
     public boolean readBoolean() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Boolean);
         bytesRead++;
+        positionInInput++;
         return ((TypedGeneratedValue.BooleanValue) ret).value;
     }
 
     public String readString(List<String> dictionary) throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readStringValue(dictionary);
         bytesRead+=4; //Historically JQF has counted strings as 4 bytes (an int into a dictionary)
+        positionInInput++;
         return ((TypedGeneratedValue.StringValue) ret).value;
     }
 
     public char readChar() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Char);
         bytesRead += 2;
+        positionInInput++;
         return ((TypedGeneratedValue.CharValue) ret).value;
     }
 
     public float readFloat() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Float);
         bytesRead += 4;
+        positionInInput++;
         return ((TypedGeneratedValue.FloatValue) ret).value;
     }
 
     public short readShort() throws IOException {
-        checkForEOFAndIncrement();
+        checkForEOF();
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.Short);
         bytesRead += 2;
+        positionInInput++;
         return ((TypedGeneratedValue.ShortValue) ret).value;
     }
 
@@ -127,6 +134,7 @@ public class TypedInputStream extends InputStream {
                     if(positionInInput + i < input.size()){
                         TypedGeneratedValue next = input.get(positionInInput + i);
                         if(next.type == type){
+                            //TODO consider removing the values so that we never try to mutate them
                             positionInInput += i;
                             input.numAlignments++;
                             return next;
