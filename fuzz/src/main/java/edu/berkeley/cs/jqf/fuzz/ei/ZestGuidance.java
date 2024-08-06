@@ -1276,7 +1276,7 @@ public class ZestGuidance implements Guidance {
                 int offset = random.nextInt(newInput.values.size());
                 // desc += String.format(":%d@%d", mutationSize, idx);
                 TypedGeneratedValue existing = newInput.values.get(offset);
-                newInput.values.set(offset, TypedGeneratedValue.generate(existing.type, random, existing instanceof TypedGeneratedValue.StringValue ? ((TypedGeneratedValue.StringValue) existing).dictionary : null));
+                newInput.values.set(offset, TypedGeneratedValue.generate(existing.type, random));
             }
 
             return newInput;

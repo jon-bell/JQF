@@ -84,10 +84,10 @@ public class TypedInputStream extends InputStream {
 
     public String readString(List<String> dictionary) throws IOException {
         checkForEOF();
-        TypedGeneratedValue ret = readStringValue(dictionary);
+        TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.String);
         bytesRead+=4; //Historically JQF has counted strings as 4 bytes (an int into a dictionary)
         positionInInput++;
-        return ((TypedGeneratedValue.StringValue) ret).value;
+        return dictionary.get(((TypedGeneratedValue.StringValue) ret).keyNotBoundedBySize % dictionary.size());
     }
 
     public char readChar() throws IOException {
@@ -115,13 +115,7 @@ public class TypedInputStream extends InputStream {
     }
 
     private static final int SCAN_FORWARD_LIMIT = 20;
-    private TypedGeneratedValue readStringValue(List<String> dictionary){
-        return _readValueInternal(TypedGeneratedValue.Type.String, dictionary);
-    }
-    private TypedGeneratedValue readValue(TypedGeneratedValue.Type type) {
-        return _readValueInternal(type, null);
-    }
-    private TypedGeneratedValue _readValueInternal(TypedGeneratedValue.Type type, List<String> dictionary){
+    private TypedGeneratedValue readValue(TypedGeneratedValue.Type type){
         if(positionInInput < input.size()){
             TypedGeneratedValue ret = input.get(positionInInput);
             if(ret.type == type){
@@ -144,13 +138,13 @@ public class TypedInputStream extends InputStream {
                 // If we reach here, we didn't find a value of the correct type
                 // Generate a new value and insert it here in the input
                 // TODO consider instead replacing the next value? experiment?
-                ret = TypedGeneratedValue.generate(type, random, dictionary);
+                ret = TypedGeneratedValue.generate(type, random);
                 input.insert(positionInInput, ret);
                 return ret;
             }
         } else {
             // We are at the end, generate a new value
-            TypedGeneratedValue ret = TypedGeneratedValue.generate(type, random, dictionary);
+            TypedGeneratedValue ret = TypedGeneratedValue.generate(type, random);
             input.add(ret);
             return ret;
         }

@@ -17,16 +17,7 @@ public abstract class TypedGeneratedValue implements Serializable {
         Type type = Type.valueOf(dis.readUTF());
         switch (type) {
             case String:
-                String val = dis.readUTF();
-                int dictSize = dis.readInt();
-                List<String> dictionary = null;
-                if(dictSize > 0){
-                    dictionary = new java.util.ArrayList<>();
-                    for (int i = 0; i < dictSize; i++) {
-                        dictionary.add(dis.readUTF());
-                    }
-                }
-                return new StringValue(val, dictionary);
+                return new StringValue(dis.readInt());
             case Integer:
                 return new IntegerValue(dis.readInt());
             case Float:
@@ -53,16 +44,7 @@ public abstract class TypedGeneratedValue implements Serializable {
             out.writeUTF(type.toString());
             switch (type) {
                 case String:
-                    StringValue _this = (StringValue) this;
-                    out.writeUTF(_this.value);
-                    if(_this.dictionary != null){
-                        out.writeInt(_this.dictionary.size());
-                        for (String s : _this.dictionary) {
-                            out.writeUTF(s);
-                        }
-                    } else {
-                        out.writeInt(-1);
-                    }
+                    out.writeInt(((StringValue) this).keyNotBoundedBySize);
                     break;
                 case Integer:
                     out.writeInt(((IntegerValue) this).value);
@@ -98,23 +80,23 @@ public abstract class TypedGeneratedValue implements Serializable {
         String, Integer, Float, Boolean, Byte, Long, Double, Short, Char;
     }
     private static final int MAX_STRING_LENGTH = 20;
-    public static TypedGeneratedValue generateString(Random random, List<String> dictionary){
-//        boolean useDictionary = random.nextBoolean();
-//        if(useDictionary){
-            return new StringValue(dictionary.get(random.nextInt(dictionary.size())), dictionary);
-//        } else {
-//            int length = random.nextInt(20);
-//            StringBuilder sb = new StringBuilder();
-//            for (int i = 0; i < length; i++) {
-//                sb.append((char) random.nextInt(55295));
-//            }
-//            return new StringValue(sb.toString(), dictionary);
-//        }
-    }
-    public static TypedGeneratedValue generate(Type desiredType, Random random, List<String> dictionary) {
+//    public static TypedGeneratedValue generateString(Random random, List<String> dictionary){
+////        boolean useDictionary = random.nextBoolean();
+////        if(useDictionary){
+//            return new StringValue(dictionary.get(random.nextInt(dictionary.size())), dictionary);
+////        } else {
+////            int length = random.nextInt(20);
+////            StringBuilder sb = new StringBuilder();
+////            for (int i = 0; i < length; i++) {
+////                sb.append((char) random.nextInt(55295));
+////            }
+////            return new StringValue(sb.toString(), dictionary);
+////        }
+//    }
+    public static TypedGeneratedValue generate(Type desiredType, Random random) {
         switch (desiredType) {
             case String:
-                return generateString(random, dictionary);
+                return new StringValue(Math.abs(random.nextInt()));
             case Integer:
                 return new IntegerValue(random.nextInt());
             case Float:
@@ -186,13 +168,11 @@ public abstract class TypedGeneratedValue implements Serializable {
     }
 
     public static class StringValue extends TypedGeneratedValue {
-        public final String value;
-        public final List<String> dictionary;
+        public final int keyNotBoundedBySize;
 
-        public StringValue(String value, List<String> dictionary) {
+        public StringValue(int keyNotBoundedBySize) {
             super(Type.String);
-            this.value = value;
-            this.dictionary = dictionary;
+            this.keyNotBoundedBySize = keyNotBoundedBySize;
         }
     }
 
