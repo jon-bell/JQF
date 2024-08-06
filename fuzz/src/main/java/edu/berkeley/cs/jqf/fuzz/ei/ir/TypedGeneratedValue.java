@@ -99,17 +99,17 @@ public abstract class TypedGeneratedValue implements Serializable {
     }
     private static final int MAX_STRING_LENGTH = 20;
     public static TypedGeneratedValue generateString(Random random, List<String> dictionary){
-        boolean useDictionary = random.nextBoolean();
-        if(useDictionary){
+//        boolean useDictionary = random.nextBoolean();
+//        if(useDictionary){
             return new StringValue(dictionary.get(random.nextInt(dictionary.size())), dictionary);
-        } else {
-            int length = random.nextInt(20);
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < length; i++) {
-                sb.append((char) random.nextInt(55295));
-            }
-            return new StringValue(sb.toString(), dictionary);
-        }
+//        } else {
+//            int length = random.nextInt(20);
+//            StringBuilder sb = new StringBuilder();
+//            for (int i = 0; i < length; i++) {
+//                sb.append((char) random.nextInt(55295));
+//            }
+//            return new StringValue(sb.toString(), dictionary);
+//        }
     }
     public static TypedGeneratedValue generate(Type desiredType, Random random, List<String> dictionary) {
         switch (desiredType) {
