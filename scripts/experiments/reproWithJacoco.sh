@@ -18,6 +18,11 @@ if [ "$1" = "-i" ]; then
   shift 1
 fi
 
+JACOCO_SOURCES=$ROOT_DIR/examples/target/dependency-sources
+if [ ! -d $JACOCO_SOURCES ]; then
+  (cd $ROOT_DIR/examples && mvn -q dependency:unpack-dependencies -Dclassifier=sources -DincludeArtifactIds=maven-model,closure-compiler,rhino,ant,bcel -DoutputDirectory=target/dependency-sources)
+fi
+
 class="$1"
 method="$2"
 JACOCO_JAR=$ROOT_DIR/target/jacocoagent.jar
@@ -26,7 +31,19 @@ if [ ! -f $JACOCO_JAR ]; then
   (cd $ROOT_DIR/target && unzip org.jacoco.agent-0.8.7.jar)
 fi
 
+if [ -f $ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.10.jar ]; then
+  rm $ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.10.jar
+  mvn -q dependency:get -Dartifact=org.jacoco:org.jacoco.report:0.8.7
+  mvn -q dependency:copy -Dartifact=org.jacoco:org.jacoco.report:0.8.7 -DoutputDirectory=$ROOT_DIR/examples/target/dependency/
+fi
+if [ -f $ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.10.jar ]; then
+  rm $ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.10.jar
+  mvn -q dependency:get -Dartifact=org.jacoco:org.jacoco.core:0.8.7
+  mvn -q dependency:copy -Dartifact=org.jacoco:org.jacoco.core:0.8.7 -DoutputDirectory=$ROOT_DIR/examples/target/dependency/
+fi
 echo $JACOCO_JAR
+# Chocopy contains a copy of ant, so we need to exclude it when processing coverage for ant...
+rm -f $ROOT_DIR/examples/target/dependency/chocopy*
 
 export CLASSPATH="$ROOT_DIR/examples/target/classes/:$ROOT_DIR/examples/target/test-classes/:$ROOT_DIR/examples/target/dependency/*"
 export JVM_OPTS="-javaagent:$JACOCO_JAR=destfile=$3,includes=$4"
