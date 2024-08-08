@@ -33,7 +33,7 @@ public class TypedInputStream extends InputStream {
                 throw new IllegalStateException(new EOFException("Reached end of input stream"));
             }
         }
-        if (bytesRead > ZestGuidance.MAX_INPUT_SIZE)
+        if (input.position() + 9 > ZestGuidance.MAX_INPUT_SIZE)
             throw new IllegalStateException(new EOFException("Input too large"));
     }
 
