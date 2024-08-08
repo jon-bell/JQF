@@ -46,7 +46,7 @@ export expandedCP=$(join_by ":" $deps)
 
 
 if [ -d "$2" ]; then rm -Rf $2; fi
-export jacocoJars="$ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.10.jar:$ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.10.jar"
+export jacocoJars="$ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.7.jar:$ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.7.jar"
 export cmd="java -cp $JACOCO_UTIL_JAR:$jacocoJars -DJACOCO_SOURCES=$JACOCO_SOURCES fun.jvm.jacoco.reachability.entry.TolerantJacocoReportBuilder $1 $ROOT_DIR/examples/target/test-classes:$expandedCP $2 $3"
 
 COVERAGE_JSON=`$cmd | tail -n 1`

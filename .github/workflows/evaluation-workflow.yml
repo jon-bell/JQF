@@ -60,13 +60,13 @@ jobs:
       matrix-analyze: ${{ steps.set-matrix.outputs.matrix-analyze }}
       base-url: ${{ steps.set-matrix.outputs.base-url }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set matrix for evaluation
         id: set-matrix
         run: |
-          echo "::set-output name=matrix-run::$( python3 scripts/experiments/generate-experiment-matrix.py ${{ inputs.trials }} )"
-          echo "::set-output name=matrix-analyze::$( python3 scripts/experiments/generate-experiment-matrix.py )"
-          echo "::set-output name=base-url::https://ci.in.ripley.cloud/logs/public/${{ github.repository }}/${{ github.sha }}/$(./scripts/experiments/urlencode.sh "${{ github.workflow }}")/${{ github.run_id }}/${{ github.run_attempt }}/site/"
+          echo "matrix-run=$( python3 scripts/experiments/generate-experiment-matrix.py ${{ inputs.trials }} )" >> $GITHUB_OUTPUT
+          echo "matrix-analyze=$( python3 scripts/experiments/generate-experiment-matrix.py )" >> $GITHUB_OUTPUT
+          echo "base-url=https://ci.in.ripley.cloud/logs/public/${{ github.repository }}/${{ github.sha }}/$(./scripts/experiments/urlencode.sh "${{ github.workflow }}")/${{ github.run_id }}/${{ github.run_attempt }}/site/" >> $GITHUB_OUTPUT
   run-fuzzer:
     runs-on: ${{ inputs.runs_on }}
     timeout-minutes: 1560
@@ -79,7 +79,7 @@ jobs:
     strategy:
         matrix: ${{fromJson(needs.build-matrix.outputs.matrix-run)}}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Telegraf config
         uses: DamianReeves/write-file-action@v1.0
         with:
@@ -226,7 +226,7 @@ jobs:
       DURATION: ${{ inputs.duration }}
       JAVA_HOME: ${{ inputs.java_home }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v2
       - id: repro
         name: Repro
@@ -242,19 +242,25 @@ jobs:
             coveragePackages=$(jq -r ".coveragePackages" <<< $value)
             echo $id
             echo $coveragePackages
+            find . -maxdepth 2 -type f -name "${id}_failures_*" -exec mv {} . \;
+            find . -maxdepth 1 -type f -name "${id}_failures_*.tgz" -exec tar xzf {} \;
             find . -maxdepth 2 -type f -name "${id}_corpus_*" -exec mv {} . \;
             find . -maxdepth 1 -type f -name "${id}_corpus_*.tgz" -exec tar xzf {} \;
             find . -maxdepth 1 -name "*${id}_*.tgz" -exec rm -rf {} \;
             rm -f jacoco.exec
-
-            bash scripts/experiments/reproWithJacoco.sh $class $method jacoco.exec "$coveragePackages" "${id}_corpus_*"
-            bash scripts/experiments/get_coverage.sh jacoco.exec "$coveragePackages" jacoco-$id
-            JACOCO_SUMMARY+="\"${id}\": $(cat jacoco_summary.json),"
-            mv jacoco_summary.json "$RESULTS_DIR/artifacts/${id}_jacoco_summary.json"
-            cp -r jacoco-$id "$RESULTS_DIR/"
+            for i in $(seq 0 $((TRIALS-1)))
+            do
+              echo "Processing $TARGET trial $i"
+              # run the script
+              bash scripts/experiments/reproWithJacoco.sh $class $method jacoco.exec "$coveragePackages" "${id}_corpus_$i" "${id}_failures_$i"
+              bash scripts/experiments/get_coverage.sh jacoco.exec "$coveragePackages" jacoco-$id-$i
+              JACOCO_SUMMARY+="\"${id}-${i}\": $(cat jacoco_summary.json),"
+              mv jacoco_summary.json "$RESULTS_DIR/artifacts/${id}_${i}_jacoco_summary.json"
+              cp -r jacoco-$id-$i "$RESULTS_DIR/"
+            done
           done
           JACOCO_SUMMARY+='"site_url":"$BASE_URL"}'
-          echo "::set-output name=jacoco-summary::$JACOCO_SUMMARY"
+          echo "jacoco-summary=$JACOCO_SUMMARY" >> $GITHUB_OUTPUT
           mv "$RESULTS_DIR"/jacoco* "$RESULTS_DIR/artifacts/"
   build-site:
     runs-on: self-hosted
@@ -263,10 +269,10 @@ jobs:
       RENV_PATHS_ROOT: /ci-logs/renv
       PROFILE_HEAP: ${{ inputs.PROFILE_HEAP }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           repository: 'jon-bell/fuzzing-build-site-action'
-          ref: 'main'
+          ref: 'v2'
       - name: Fetch workflow runs to compare to
         id: fetch-compare
         uses: jon-bell/list-workflow-runs-by-branch-action@main
@@ -274,7 +280,7 @@ jobs:
           include_branches: ${{ inputs.report_on_branches}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build site
-        uses: jon-bell/fuzzing-build-site-action@main
+        uses: jon-bell/fuzzing-build-site-action@v2
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           comparisons: ${{ steps.fetch-compare.outputs.workflow_runs }}
