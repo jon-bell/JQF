@@ -87,7 +87,7 @@ public class TypedInputStream extends InputStream {
         TypedGeneratedValue ret = readValue(TypedGeneratedValue.Type.String);
         bytesRead+=4; //Historically JQF has counted strings as 4 bytes (an int into a dictionary)
         positionInInput++;
-        return dictionary.get(((TypedGeneratedValue.StringValue) ret).keyNotBoundedBySize % dictionary.size());
+        return dictionary.get(Math.abs(((TypedGeneratedValue.StringValue) ret).keyNotBoundedBySize % dictionary.size()));
     }
 
     public char readChar() throws IOException {
