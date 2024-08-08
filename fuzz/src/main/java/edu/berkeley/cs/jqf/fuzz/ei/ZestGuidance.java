@@ -64,6 +64,7 @@ import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
 import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
+import org.eclipse.collections.impl.list.mutable.primitive.IntArrayList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
 
 import javax.sound.sampled.Line;
@@ -1219,6 +1220,9 @@ public class ZestGuidance implements Guidance {
         public int numAlignments;
         public int misAlignments;
 
+        /** For GC **/
+        public IntArrayList skippedIndices;
+
         public LinearInput() {
             super();
             this.values = new ArrayList<>();
@@ -1251,6 +1255,13 @@ public class ZestGuidance implements Guidance {
             if(requested + 1 < values.size()) {
                 values = new ArrayList<>(values.subList(0, requested + 1));
                 values.trimToSize();
+            }
+
+            if(skippedIndices != null){
+                //Delete values at skipped indices
+                for(int i = skippedIndices.size() - 1; i >= 0; i--){
+                    values.remove(skippedIndices.get(i));
+                }
             }
 
             // Inputs should not be empty, otherwise mutations don't work
@@ -1309,6 +1320,15 @@ public class ZestGuidance implements Guidance {
             values.add(val);
             if(values.size() > requested){
                 requested = values.size();
+            }
+        }
+
+        public void skip(int from, int to){
+            if(skippedIndices == null){
+                skippedIndices = new IntArrayList(5);
+            }
+            for(int i = from; i < to; i++){
+                skippedIndices.add(i);
             }
         }
     }

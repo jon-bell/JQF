@@ -128,7 +128,7 @@ public class TypedInputStream extends InputStream {
                     if(positionInInput + i < input.size()){
                         TypedGeneratedValue next = input.get(positionInInput + i);
                         if(next.type == type){
-                            //TODO consider removing the values so that we never try to mutate them
+                            input.skip(positionInInput, positionInInput + i);
                             positionInInput += i;
                             input.numAlignments++;
                             return next;
