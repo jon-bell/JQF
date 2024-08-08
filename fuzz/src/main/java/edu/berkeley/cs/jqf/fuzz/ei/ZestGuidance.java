@@ -29,37 +29,13 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
-import java.io.*;
-import java.nio.ByteBuffer;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Duration;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-
 import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
 import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
 import edu.berkeley.cs.jqf.fuzz.guidance.TimeoutException;
-import edu.berkeley.cs.jqf.fuzz.util.Coverage;
-import edu.berkeley.cs.jqf.fuzz.util.CoverageFactory;
-import edu.berkeley.cs.jqf.fuzz.util.FastNonCollidingCoverage;
-import edu.berkeley.cs.jqf.fuzz.util.ICoverage;
-import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
+import edu.berkeley.cs.jqf.fuzz.util.*;
 import edu.berkeley.cs.jqf.instrument.tracing.FastCoverageSnoop;
 import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
@@ -67,6 +43,15 @@ import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
 import org.eclipse.collections.impl.list.mutable.primitive.IntArrayList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
+
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static java.lang.Math.ceil;
 import static java.lang.Math.log;
@@ -732,6 +717,9 @@ public class ZestGuidance implements Guidance {
                 // Increment valid counter
                 numValid++;
             }
+            if(currentInput instanceof LinearInput){
+                ((LinearInput) currentInput).validate();
+            }
 
             if (result == Result.SUCCESS || (result == Result.INVALID && !SAVE_ONLY_VALID)) {
 
@@ -1238,6 +1226,43 @@ public class ZestGuidance implements Guidance {
             this.values.rewind();
         }
 
+        public void validate(){
+            for(int i = 0; i < this.numValues; i++){
+                TypedGeneratedValue.Type type = typeAt(i);
+                switch(type){
+                    case Integer:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Double:
+                        values.getDouble(i * 9 + 1);
+                        break;
+                    case String:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Boolean:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Byte:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Char:
+                        values.getChar(i * 9 + 1);
+                        break;
+                    case Float:
+                        values.getFloat(i * 9 + 1);
+                        break;
+                    case Long:
+                        values.getLong(i * 9 + 1);
+                        break;
+                    case Short:
+                        values.getShort(i * 9 + 1);
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+            }
+        }
+
         public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
             throw new UnsupportedOperationException("This really seems like it should be the responsibility of the input stream, not the input...");
         }
@@ -1246,6 +1271,9 @@ public class ZestGuidance implements Guidance {
             return values.position();
         }
         public void mark(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
+            }
             values.mark();
         }
         public void reset(){
@@ -1253,7 +1281,7 @@ public class ZestGuidance implements Guidance {
         }
         @Override
         public int size() {
-            return this.numValues;
+            return this.numValues * 9;
         }
 
         /**
@@ -1266,11 +1294,12 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            if(requested + 1 < numValues) {
-//                values = new ArrayList<>(values.subList(0, requested + 1));
-//                values.trimToSize();
-                numValues = requested + 1;
-            }
+            //TODO
+//            if(requested + 1 < numValues) {
+////                values = new ArrayList<>(values.subList(0, requested + 1));
+////                values.trimToSize();
+//                numValues = requested + 1;
+//            }
 
 //            if(skippedIndices != null){
 //                //Delete values at skipped indices
@@ -1357,117 +1386,154 @@ public class ZestGuidance implements Guidance {
             return values;
         }
 
+        private void checkPositionDebug(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
+            }
+        }
         public int getInt(){
             int ret = values.getInt();
             values.position(values.position() + 4);
+            checkPositionDebug();
             return ret;
         }
         public long getLong(){
             long ret = values.getLong();
+            checkPositionDebug();
             return ret;
         }
         public boolean getBoolean(){
             boolean ret = values.get() == 1;
             values.position(values.position() + 7);
+            checkPositionDebug();
             return ret;
+        }
+        public void advance(){
+            numValues++;
         }
         public void addInt(int value) {
             values.put((byte) TypedGeneratedValue.Type.Integer.ordinal());
             values.putInt(value);
             values.position(values.position() + 4);
-            numValues++;
+            checkPositionDebug();
         }
 
         public void addLong(long value) {
             values.put((byte) TypedGeneratedValue.Type.Long.ordinal());
             values.putLong(value);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addFloat(float value) {
             values.put((byte) TypedGeneratedValue.Type.Float.ordinal());
             values.putFloat(value);
             values.position(values.position() + 4);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         //And the rest of the types:
         public void addDouble(double value) {
+            checkPositionDebug();
             values.put((byte) TypedGeneratedValue.Type.Double.ordinal());
             values.putDouble(value);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addByte(byte value) {
             values.put((byte) TypedGeneratedValue.Type.Byte.ordinal());
             values.put(value);
             values.position(values.position() + 7);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addShort(short value) {
             values.put((byte) TypedGeneratedValue.Type.Short.ordinal());
             values.putShort(value);
             values.position(values.position() + 6);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addChar(char value) {
             values.put((byte) TypedGeneratedValue.Type.Char.ordinal());
             values.putChar(value);
             values.position(values.position() + 6);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addBoolean(boolean value) {
             values.put((byte) TypedGeneratedValue.Type.Boolean.ordinal());
             values.put(value ? (byte) 1 : (byte) 0);
             values.position(values.position() + 7);
-            numValues++;
+            checkPositionDebug();
+
         }
 
         public void addString(int idx) {
             values.put((byte) TypedGeneratedValue.Type.String.ordinal());
             values.putInt(idx);
             values.position(values.position() + 4);
-            numValues++;
+            checkPositionDebug();
+
         }
 
-        public void skip(int from, int to){
-            values.position(to*9);
+        public void skipTo(int to){
+            values.position(to);
+            checkPositionDebug();
         }
 
-        public void clearAfter(int positionInInput) {
-            numValues = positionInInput;
+        public void clearAfter(int bytesInInputNotIndex) {
+            numValues = bytesInInputNotIndex / 9;
         }
 
         public TypedGeneratedValue.Type nextType() {
-            return TypedGeneratedValue.Type.values()[values.get()];
+            checkPositionDebug();
+            int tmp = values.get();
+            if(tmp == 0){
+                throw new GuidanceException("Invalid type at position " + values.position());
+            }
+            return TypedGeneratedValue.Type.values()[tmp];
         }
 
         public byte getByte() {
             byte ret = values.get();
             values.position(values.position() + 7);
+            checkPositionDebug();
             return ret;
         }
 
         public char getChar() {
             char ret = values.getChar();
             values.position(values.position() + 6);
+            checkPositionDebug();
             return ret;
         }
 
         public short getShort() {
             short ret = values.getShort();
             values.position(values.position() + 4);
+            checkPositionDebug();
             return ret;
         }
 
         public float getFloat() {
             float ret = values.getFloat();
             values.position(values.position() + 4);
+            checkPositionDebug();
             return ret;
         }
+
+        public double getDouble() {
+            double ret= values.getDouble();
+            checkPositionDebug();
+            return ret;
+        }
+
     }
 
     public static class SeedInput extends LinearInput {

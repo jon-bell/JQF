@@ -77,6 +77,7 @@ public abstract class TypedGeneratedValue implements Serializable {
     }
 
     public enum Type {
+        INVALID,
         String, Integer, Float, Boolean, Byte, Long, Double, Short, Char;
     }
     private static final int MAX_STRING_LENGTH = 20;
