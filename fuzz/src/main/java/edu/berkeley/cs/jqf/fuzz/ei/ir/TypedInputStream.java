@@ -114,7 +114,8 @@ public class TypedInputStream extends InputStream {
         return ((TypedGeneratedValue.ShortValue) ret).value;
     }
 
-    private static final int SCAN_FORWARD_LIMIT = 20;
+    private static final int SCAN_FORWARD_LIMIT = 100;
+    private static final int SCAN_DISCARD_LIMIT = 5;
     private TypedGeneratedValue readValue(TypedGeneratedValue.Type type){
         if(positionInInput < input.size()){
             TypedGeneratedValue ret = input.get(positionInInput);
@@ -124,22 +125,29 @@ public class TypedInputStream extends InputStream {
             else {
                 // Scan forward for the next value of the correct type
                 input.misAlignments++;
-                for(int i = 1; i < SCAN_FORWARD_LIMIT; i++){
-                    if(positionInInput + i < input.size()){
-                        TypedGeneratedValue next = input.get(positionInInput + i);
-                        if(next.type == type){
-                            input.skip(positionInInput, positionInInput + i);
-                            positionInInput += i;
-                            input.numAlignments++;
-                            return next;
-                        }
+                input.misAlignmentsThisRun++;
+                int maxScanPosition = Math.min(input.size(), positionInInput + SCAN_FORWARD_LIMIT);
+                for (int i = positionInInput + 1; i < maxScanPosition; i++) {
+                    TypedGeneratedValue next = input.get(i);
+                    if (next.type == type) {
+                        input.skip(positionInInput, i);
+                        positionInInput = i;
+                        input.numAlignments++;
+                        return next;
                     }
                 }
                 // If we reach here, we didn't find a value of the correct type
                 // Generate a new value and insert it here in the input
                 // TODO consider instead replacing the next value? experiment?
                 ret = TypedGeneratedValue.generate(type, random);
-                input.insert(positionInInput, ret);
+                if(input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT){
+                    input.misAlignmentsThisRun = 0;
+                    // We are misaligned too much, discard the rest of the input
+                    input.clearAfter(positionInInput);
+                    input.add(ret);
+                } else {
+                    input.insert(positionInInput, ret);
+                }
                 return ret;
             }
         } else {

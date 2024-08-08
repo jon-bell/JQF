@@ -1219,6 +1219,7 @@ public class ZestGuidance implements Guidance {
         /** For stats **/
         public int numAlignments;
         public int misAlignments;
+        public int misAlignmentsThisRun;
 
         /** For GC **/
         public IntArrayList skippedIndices;
@@ -1330,6 +1331,11 @@ public class ZestGuidance implements Guidance {
             for(int i = from; i < to; i++){
                 skippedIndices.add(i);
             }
+        }
+
+        public void clearAfter(int positionInInput) {
+            values = new ArrayList<>(values.subList(0, positionInInput));
+            values.trimToSize();
         }
     }
 
