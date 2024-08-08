@@ -1546,8 +1546,8 @@ public class ZestGuidance implements Guidance {
             this.seedFile = seedFile;
             this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
-            this.valuesRemaining = this.in.readInt();
-            for(int i = 0; i < valuesRemaining; i++){
+            this.numValues = this.in.readInt();
+            for(int i = 0; i < this.numValues * 9; i++){
                 values.put(this.in.readByte());
             }
             values.rewind();
