@@ -30,6 +30,7 @@
 package edu.berkeley.cs.jqf.fuzz.ei;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -66,8 +67,6 @@ import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
 import org.eclipse.collections.impl.list.mutable.primitive.IntArrayList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
-
-import javax.sound.sampled.Line;
 
 import static java.lang.Math.ceil;
 import static java.lang.Math.log;
@@ -1210,8 +1209,8 @@ public class ZestGuidance implements Guidance {
 
     public static class LinearInput extends Input<Integer> {
 
-        /** A list of byte values (0-255) ordered by their index. */
-        protected ArrayList<TypedGeneratedValue> values;
+        protected ByteBuffer values;
+        protected int numValues;
 
         /** The number of bytes requested so far */
         protected int requested = 0;
@@ -1226,21 +1225,35 @@ public class ZestGuidance implements Guidance {
 
         public LinearInput() {
             super();
-            this.values = new ArrayList<>();
+            this.values = ByteBuffer.allocate(MAX_INPUT_SIZE);
         }
 
         public LinearInput(LinearInput other) {
             super(other);
-            this.values = new ArrayList<>(other.values);
+            this.values = ByteBuffer.allocate(other.values.capacity());
+            this.numValues = other.numValues;
+            other.values.rewind();
+            this.values.put(other.values);
+            other.values.rewind();
+            this.values.rewind();
         }
 
         public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
             throw new UnsupportedOperationException("This really seems like it should be the responsibility of the input stream, not the input...");
         }
 
+        public int position(){
+            return values.position();
+        }
+        public void mark(){
+            values.mark();
+        }
+        public void reset(){
+            values.reset();
+        }
         @Override
         public int size() {
-            return values.size();
+            return this.numValues;
         }
 
         /**
@@ -1253,20 +1266,21 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            if(requested + 1 < values.size()) {
-                values = new ArrayList<>(values.subList(0, requested + 1));
-                values.trimToSize();
+            if(requested + 1 < numValues) {
+//                values = new ArrayList<>(values.subList(0, requested + 1));
+//                values.trimToSize();
+                numValues = requested + 1;
             }
 
-            if(skippedIndices != null){
-                //Delete values at skipped indices
-                for(int i = skippedIndices.size() - 1; i >= 0; i--){
-                    values.remove(skippedIndices.get(i));
-                }
-            }
+//            if(skippedIndices != null){
+//                //Delete values at skipped indices
+//                for(int i = skippedIndices.size() - 1; i >= 0; i--){
+//                    values.remove(skippedIndices.get(i));
+//                }
+//            }
 
             // Inputs should not be empty, otherwise mutations don't work
-            if (values.isEmpty()) {
+            if (numValues == 0) {
                 throw new IllegalArgumentException("Input is either empty or nothing was requested from the input generator.");
             }
         }
@@ -1285,57 +1299,174 @@ public class ZestGuidance implements Guidance {
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(newInput.values.size());
+                int offset = random.nextInt(newInput.numValues);
                 // desc += String.format(":%d@%d", mutationSize, idx);
-                TypedGeneratedValue existing = newInput.values.get(offset);
-                newInput.values.set(offset, TypedGeneratedValue.generate(existing.type, random));
+                TypedGeneratedValue.Type type = newInput.typeAt(offset);
+                switch(type){
+                    case Integer:
+                        newInput.values.putInt(offset * 9 + 1, random.nextInt());
+                        break;
+                    case Double:
+                        newInput.values.putDouble(offset * 9 + 1, random.nextDouble());
+                        break;
+                    case String:
+                        newInput.values.putInt(offset * 9 + 1, random.nextInt());
+                        break;
+                    case Boolean:
+                        newInput.values.put(offset * 9 + 1, (byte) (random.nextBoolean() ? 1 : 0));
+                        break;
+                    case Byte:
+                        newInput.values.put(offset * 9 + 1, (byte) random.nextInt());
+                        break;
+                    case Char:
+                        newInput.values.putChar(offset * 9 + 1, (char) random.nextInt());
+                        break;
+                    case Float:
+                        newInput.values.putFloat(offset * 9 + 1, random.nextFloat());
+                        break;
+                    case Long:
+                        newInput.values.putLong(offset * 9 + 1, random.nextLong());
+                        break;
+                    case Short:
+                        newInput.values.putShort(offset * 9 + 1, (short) random.nextInt());
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
             }
-
             return newInput;
         }
 
         @Override
         public Iterator<TypedGeneratedValue> iterator() {
-            return values.iterator();
+            throw new UnsupportedOperationException("WIP");
         }
 
         public void writeTo(DataOutputStream out) throws IOException{
-            out.writeInt(values.size());
-            for (TypedGeneratedValue value : values) {
-                value.writeTo(out);
+            out.writeInt(this.numValues);
+            for(int i = 0; i < this.numValues * 9; i++){
+                out.writeByte(values.get(i));
             }
         }
 
-        public TypedGeneratedValue get(int idx) {
-            if(idx > requested){
-                requested = idx;
-            }
-            return values.get(idx);
+        public TypedGeneratedValue.Type typeAt(int idx) {
+            return TypedGeneratedValue.Type.values()[values.get(idx * 9)];
         }
 
-        public void insert(int insertAt, TypedGeneratedValue val) {
-            values.add(insertAt, val);
+        public ByteBuffer getValues() {
+            return values;
         }
 
-        public void add(TypedGeneratedValue val) {
-            values.add(val);
-            if(values.size() > requested){
-                requested = values.size();
-            }
+        public int getInt(){
+            int ret = values.getInt();
+            values.position(values.position() + 4);
+            return ret;
+        }
+        public long getLong(){
+            long ret = values.getLong();
+            return ret;
+        }
+        public boolean getBoolean(){
+            boolean ret = values.get() == 1;
+            values.position(values.position() + 7);
+            return ret;
+        }
+        public void addInt(int value) {
+            values.put((byte) TypedGeneratedValue.Type.Integer.ordinal());
+            values.putInt(value);
+            values.position(values.position() + 4);
+            numValues++;
+        }
+
+        public void addLong(long value) {
+            values.put((byte) TypedGeneratedValue.Type.Long.ordinal());
+            values.putLong(value);
+            numValues++;
+        }
+
+        public void addFloat(float value) {
+            values.put((byte) TypedGeneratedValue.Type.Float.ordinal());
+            values.putFloat(value);
+            values.position(values.position() + 4);
+            numValues++;
+        }
+
+        //And the rest of the types:
+        public void addDouble(double value) {
+            values.put((byte) TypedGeneratedValue.Type.Double.ordinal());
+            values.putDouble(value);
+            numValues++;
+        }
+
+        public void addByte(byte value) {
+            values.put((byte) TypedGeneratedValue.Type.Byte.ordinal());
+            values.put(value);
+            values.position(values.position() + 7);
+            numValues++;
+        }
+
+        public void addShort(short value) {
+            values.put((byte) TypedGeneratedValue.Type.Short.ordinal());
+            values.putShort(value);
+            values.position(values.position() + 6);
+            numValues++;
+        }
+
+        public void addChar(char value) {
+            values.put((byte) TypedGeneratedValue.Type.Char.ordinal());
+            values.putChar(value);
+            values.position(values.position() + 6);
+            numValues++;
+        }
+
+        public void addBoolean(boolean value) {
+            values.put((byte) TypedGeneratedValue.Type.Boolean.ordinal());
+            values.put(value ? (byte) 1 : (byte) 0);
+            values.position(values.position() + 7);
+            numValues++;
+        }
+
+        public void addString(int idx) {
+            values.put((byte) TypedGeneratedValue.Type.String.ordinal());
+            values.putInt(idx);
+            values.position(values.position() + 4);
+            numValues++;
         }
 
         public void skip(int from, int to){
-            if(skippedIndices == null){
-                skippedIndices = new IntArrayList(5);
-            }
-            for(int i = from; i < to; i++){
-                skippedIndices.add(i);
-            }
+            values.position(to*9);
         }
 
         public void clearAfter(int positionInInput) {
-            values = new ArrayList<>(values.subList(0, positionInInput));
-            values.trimToSize();
+            numValues = positionInInput;
+        }
+
+        public TypedGeneratedValue.Type nextType() {
+            return TypedGeneratedValue.Type.values()[values.get()];
+        }
+
+        public byte getByte() {
+            byte ret = values.get();
+            values.position(values.position() + 7);
+            return ret;
+        }
+
+        public char getChar() {
+            char ret = values.getChar();
+            values.position(values.position() + 6);
+            return ret;
+        }
+
+        public short getShort() {
+            short ret = values.getShort();
+            values.position(values.position() + 4);
+            return ret;
+        }
+
+        public float getFloat() {
+            float ret = values.getFloat();
+            values.position(values.position() + 4);
+            return ret;
         }
     }
 
@@ -1351,9 +1482,9 @@ public class ZestGuidance implements Guidance {
             this.desc = "seed";
             this.valuesRemaining = this.in.readInt();
             for(int i = 0; i < valuesRemaining; i++){
-                TypedGeneratedValue value = TypedGeneratedValue.readOneValue(in);
-                values.add(value);
+                values.put(this.in.readByte());
             }
+            values.rewind();
         }
 
         @Override
