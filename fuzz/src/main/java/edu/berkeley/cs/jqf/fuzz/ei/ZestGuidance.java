@@ -1490,7 +1490,8 @@ public class ZestGuidance implements Guidance {
         }
 
         public void clearAfter(int bytesInInputNotIndex) {
-//            numValues = (bytesInInputNotIndex + 1) / 9;
+            numValues = (bytesInInputNotIndex) / 9;
+            numValues++;
         }
 
         public TypedGeneratedValue.Type nextType() {
@@ -1541,12 +1542,6 @@ public class ZestGuidance implements Guidance {
     public static class SeedInput extends LinearInput {
         final File seedFile;
         final DataInputStream in;
-        int valuesRemaining = 0;
-
-        @Override
-        public void clearAfter(int bytesInInputNotIndex) {
-            /** no-op **/
-        }
 
         public SeedInput(File seedFile) throws IOException {
             super();
