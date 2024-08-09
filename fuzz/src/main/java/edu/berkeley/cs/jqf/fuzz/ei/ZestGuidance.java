@@ -1372,10 +1372,12 @@ public class ZestGuidance implements Guidance {
         }
 
         public void writeTo(DataOutputStream out) throws IOException{
+            this.values.rewind();
             out.writeInt(this.numValues);
             for(int i = 0; i < this.numValues * 9; i++){
                 out.writeByte(values.get(i));
             }
+            this.values.rewind();
         }
 
         public TypedGeneratedValue.Type typeAt(int idx) {
