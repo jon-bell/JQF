@@ -1320,10 +1320,10 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, MEAN_MUTATION_COUNT);
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues/10));
             newInput.desc += ",havoc:"+numMutations;
 
-//            boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
+            boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
 
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
@@ -1333,31 +1333,31 @@ public class ZestGuidance implements Guidance {
                 TypedGeneratedValue.Type type = newInput.typeAt(offset);
                 switch(type){
                     case Integer:
-                        newInput.values.putInt(offset * 9 + 1, random.nextInt());
+                        newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
                         break;
                     case Double:
-                        newInput.values.putDouble(offset * 9 + 1, random.nextDouble());
+                        newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
                         break;
                     case String:
-                        newInput.values.putInt(offset * 9 + 1, random.nextInt());
+                        newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
                         break;
                     case Boolean:
-                        newInput.values.put(offset * 9 + 1, (byte) (random.nextBoolean() ? 1 : 0));
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextBoolean() ? 1 : 0));
                         break;
                     case Byte:
-                        newInput.values.put(offset * 9 + 1, (byte) random.nextInt());
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
                         break;
                     case Char:
-                        newInput.values.putChar(offset * 9 + 1, (char) random.nextInt());
+                        newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
                         break;
                     case Float:
-                        newInput.values.putFloat(offset * 9 + 1, random.nextFloat());
+                        newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
                         break;
                     case Long:
-                        newInput.values.putLong(offset * 9 + 1, random.nextLong());
+                        newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
                         break;
                     case Short:
-                        newInput.values.putShort(offset * 9 + 1, (short) random.nextInt());
+                        newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
                         break;
                     default:
                         throw new UnsupportedOperationException();
