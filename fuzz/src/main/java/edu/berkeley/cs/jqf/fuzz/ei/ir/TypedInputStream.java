@@ -12,7 +12,6 @@ import java.util.Random;
 public class TypedInputStream extends InputStream {
     private Random random;
     private ZestGuidance.LinearInput input;
-    private int bytesRead = 0;
 
     /*
     Plan:
@@ -240,10 +239,9 @@ public class TypedInputStream extends InputStream {
     public boolean readBoolean() throws IOException {
         checkForEOF();
         if (input.position() < input.size()) {
-            input.getValues().mark();
+            input.mark();
             TypedGeneratedValue.Type atPosition = input.nextType();
             if (atPosition == TypedGeneratedValue.Type.Boolean) {
-                bytesRead += 1;
                 return input.getBoolean();
             } else {
                 input.reset();
@@ -292,7 +290,6 @@ public class TypedInputStream extends InputStream {
             input.getValues().mark();
             TypedGeneratedValue.Type atPosition = input.nextType();
             if (atPosition == TypedGeneratedValue.Type.Char) {
-                bytesRead += 2;
                 return input.getChar();
             } else {
                 input.reset();
