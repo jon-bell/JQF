@@ -1519,7 +1519,7 @@ public class ZestGuidance implements Guidance {
 
         public short getShort() {
             short ret = values.getShort();
-            values.position(values.position() + 4);
+            values.position(values.position() + 6);
             checkPositionDebug();
             return ret;
         }
