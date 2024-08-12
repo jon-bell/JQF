@@ -343,7 +343,7 @@ public class TypedInputStream extends InputStream {
                     input.skipTo(idx);
                     assert (input.nextType() == TypedGeneratedValue.Type.Float);
                     input.numAlignments++;
-                    return input.getShort();
+                    return input.getFloat();
                 }
                 // If we reach here, we didn't find a value of the correct type
                 // Generate a new value and insert it here in the input
