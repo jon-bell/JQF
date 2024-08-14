@@ -665,7 +665,7 @@ public class ZestGuidance implements Guidance {
         }
 
         String plotData = String.format(
-                "%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d, %.2f, %.2f, %.2f, %d, %d, %d, %d, %d",
+                "%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d, %.2f, %.2f, %.2f, %d, %d, %d, %d",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()),
                 cyclesCompleted,
                 currentParentInputIdx,
