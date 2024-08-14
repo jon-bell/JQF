@@ -1,6 +1,8 @@
 package de.hub.se.jqf.bedivfuzz.guidance;
 
 import java.io.File;
+import java.time.Duration;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Random;
 
@@ -30,10 +32,19 @@ public class BeDivFuzzDriver {
         }
 
         try {
+            Duration duration = null;
+            String time = System.getProperty("time");
+            if (time != null && !time.isEmpty()) {
+                try {
+                    duration = Duration.parse("PT" + time);
+                } catch (DateTimeParseException e) {
+                    throw new IllegalArgumentException("Invalid time duration: " + time);
+                }
+            }
             // Load the guidance
             String title = testClassName+"#"+testMethodName;
             Random rnd = new Random(); // TODO: Support deterministic PRNG
-            BeDivFuzzGuidance guidance = new BeDivFuzzGuidance(title, null, null, outputDirectory, rnd);
+            BeDivFuzzGuidance guidance = new BeDivFuzzGuidance(title, duration, null, outputDirectory, rnd);
 
             Locale.setDefault(Locale.US);
 
