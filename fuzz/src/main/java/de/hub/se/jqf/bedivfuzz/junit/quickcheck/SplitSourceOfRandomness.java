@@ -1,6 +1,8 @@
 package de.hub.se.jqf.bedivfuzz.junit.quickcheck;
 
 import com.pholser.junit.quickcheck.random.SourceOfRandomness;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedStreamBackedRandom;
 import edu.berkeley.cs.jqf.fuzz.guidance.StreamBackedRandom;
 import edu.berkeley.cs.jqf.fuzz.junit.quickcheck.FastSourceOfRandomness;
 
@@ -34,8 +36,8 @@ public class SplitSourceOfRandomness implements SplitRandom {
         value = new FastSourceOfRandomness(valueDelegate);
     }
 
-    public SplitSourceOfRandomness(InputStream input) {
-        StreamBackedRandom delegate = new StreamBackedRandom(input, 2 * Long.BYTES);
+    public SplitSourceOfRandomness(TypedInputStream input) {
+        StreamBackedRandom delegate = new TypedStreamBackedRandom(input, 2 * Long.BYTES);
         structure = new FastSourceOfRandomness(delegate);
         value = new FastSourceOfRandomness(delegate);
     }

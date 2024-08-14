@@ -2,6 +2,7 @@ package de.hub.se.jqf.bedivfuzz.junit.quickcheck;
 
 import de.hub.se.jqf.bedivfuzz.junit.quickcheck.generator.SplitBinaryTreeGenerator;
 import de.hub.se.jqf.bedivfuzz.junit.quickcheck.tracking.SplitTrackingSourceOfRandomness;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -20,7 +21,7 @@ public class SplitRandomTest {
     public void setupSourceOfRandomness() {
         Random r = new Random(24);
         randomInput = new RandomInput();
-        random = new SplitSourceOfRandomness(randomInput.toInputStream(r));
+        random = new SplitSourceOfRandomness((TypedInputStream) randomInput.toInputStream(r));
 
         Random r2 = new Random(24);
         trackingInput = new RandomInput();

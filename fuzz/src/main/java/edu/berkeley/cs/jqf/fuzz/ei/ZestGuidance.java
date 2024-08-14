@@ -29,17 +29,8 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Console;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintWriter;
+import java.io.*;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -62,6 +53,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.eclipsecollections.EclipseCollectionsModule;
 import de.hub.se.jqf.bedivfuzz.util.BehavioralDiversityMetrics;
 import de.hub.se.jqf.bedivfuzz.util.BranchHitCounter;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -163,6 +156,12 @@ public class ZestGuidance implements Guidance {
      * but we do not really save inputs in TOTALLY_RANDOM mode.
      */
     protected int numSavedInputs = 0;
+
+    protected int numSavedInputsWithMisalignments = 0;
+    protected int numMisalignments = 0;
+    protected int numSavedAlignedInputs = 0;
+    protected int numAlignmentsInSavedInputs = 0;
+
 
     /** Coverage statistics for a single run. */
     protected ICoverage runCoverage = CoverageFactory.newInstance();
@@ -292,10 +291,10 @@ public class ZestGuidance implements Guidance {
     protected final boolean SAVE_ONLY_VALID = Boolean.getBoolean("jqf.ei.SAVE_ONLY_VALID");
 
     /** Max input size to generate. */
-    protected final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
+    public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
-    protected final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
+    public static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
     /** Baseline number of mutated children to produce from a given parent input. */
     protected final int NUM_CHILDREN_BASELINE = 50;
@@ -527,7 +526,7 @@ public class ZestGuidance implements Guidance {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
                 "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, " +
                 "valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes, num_coverage_probes, " +
-                "covered_semantic_probes, num_semantic_probes, unique_paths, b0, b1, b2";
+                "covered_semantic_probes, num_semantic_probes, unique_paths, b0, b1, b2, numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs";
     }
 
     protected String getFailureStatNames() {
@@ -645,6 +644,8 @@ public class ZestGuidance implements Guidance {
                 console.printf("Cycles completed:     %d\n", cyclesCompleted);
                 console.printf("Unique failures:      %,d\n", uniqueFailures.size());
                 console.printf("Queue size:           %,d (%,d favored last cycle)\n", savedInputs.size(), numFavoredLastCycle);
+                console.printf("Misaligned inputs:    %d (avg %d/input)\n", numSavedInputsWithMisalignments, numSavedInputsWithMisalignments > 0 ? numMisalignments / numSavedInputsWithMisalignments: 0);
+                console.printf("Realigned inputs:     %d (avg %d/input)\n", numSavedAlignedInputs, numSavedAlignedInputs > 0 ? numAlignmentsInSavedInputs / numSavedAlignedInputs: 0);
                 console.printf("Current parent input: %s\n", currentParentInputDesc);
                 console.printf("Execution speed:      %,d/sec now | %,d/sec overall\n", intervalExecsPerSec, execsPerSec);
                 console.printf("Total coverage:       %,d branches (%.2f%% of map)\n", nonZeroCount, nonZeroFraction);
@@ -664,7 +665,7 @@ public class ZestGuidance implements Guidance {
         }
 
         String plotData = String.format(
-                "%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d, %.2f, %.2f, %.2f",
+                "%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d, %.2f, %.2f, %.2f, %d, %d, %d, %d, %d",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()),
                 cyclesCompleted,
                 currentParentInputIdx,
@@ -687,7 +688,8 @@ public class ZestGuidance implements Guidance {
                 uniquePaths.size(),
                 divMetrics.b0(),
                 divMetrics.b1(),
-                divMetrics.b2()
+                divMetrics.b2(),
+                numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs
         );
 
         appendLineToFile(statsFile, plotData);
@@ -802,22 +804,7 @@ public class ZestGuidance implements Guidance {
      * @return an InputStream that delivers parameters to the generators
      */
     protected InputStream createParameterStream() {
-        // Return an input stream that reads bytes from a linear array
-        return new InputStream() {
-            int bytesRead = 0;
-
-            @Override
-            public int read() throws IOException {
-                assert currentInput instanceof LinearInput : "ZestGuidance should only mutate LinearInput(s)";
-
-                // For linear inputs, get with key = bytesRead (which is then incremented)
-                LinearInput linearInput = (LinearInput) currentInput;
-                // Attempt to get a value from the list, or else generate a random value
-                int ret = linearInput.getOrGenerateFresh(bytesRead++, random);
-                // infoLog("read(%d) = %d", bytesRead, ret);
-                return ret;
-            }
-        };
+        return new TypedInputStream((LinearInput) currentInput, random);
     }
 
     @Override
@@ -939,6 +926,18 @@ public class ZestGuidance implements Guidance {
                     // libFuzzerCompat stats are only displayed when they hit new coverage
                     if (LIBFUZZER_COMPAT_OUTPUT) {
                         displayStats(false);
+                    }
+
+                    if(currentInput instanceof LinearInput){
+                        LinearInput linearInput = (LinearInput) currentInput;
+                        if(linearInput.misAlignments > 0){
+                            numSavedInputsWithMisalignments++;
+                            numMisalignments += linearInput.misAlignments;
+                        }
+                        if(linearInput.numAlignments > 0){
+                            numSavedAlignedInputs++;
+                            numAlignmentsInSavedInputs += linearInput.numAlignments;
+                        }
                     }
 
                     infoLog("Saving new input (at run %d): " +
@@ -1151,13 +1150,10 @@ public class ZestGuidance implements Guidance {
     }
 
     protected void writeCurrentInputToFile(File saveFile) throws IOException {
-        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(saveFile))) {
-            for (Integer b : currentInput) {
-                assert (b >= 0 && b < 256);
-                out.write(b);
-            }
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(saveFile)))) {
+            if(currentInput instanceof LinearInput)
+                ((LinearInput) currentInput).writeTo(out);
         }
-
     }
 
     /* Saves an interesting input to the queue. */
@@ -1421,62 +1417,88 @@ public class ZestGuidance implements Guidance {
 
     public class LinearInput extends Input<Integer> {
 
-        /** A list of byte values (0-255) ordered by their index. */
-        public ArrayList<Integer> values;
+        public ByteBuffer values;
+        public int numValues;
 
         /** The number of bytes requested so far */
-        protected int requested = 0;
+        public int requested = 0;
+        /** For stats **/
+        public int numAlignments;
+        public int misAlignments;
+        public int misAlignmentsThisRun;
 
         public LinearInput() {
             super();
-            this.values = new ArrayList<>();
+            this.values = ByteBuffer.allocate(MAX_INPUT_SIZE);
         }
 
         public LinearInput(LinearInput other) {
             super(other);
-            this.values = new ArrayList<>(other.values);
+            this.values = ByteBuffer.allocate(other.values.capacity());
+            this.numValues = other.numValues;
+            other.values.rewind();
+            this.values.put(other.values);
+            other.values.rewind();
+            this.values.rewind();
         }
-
+        public void validate(){
+            for(int i = 0; i < this.numValues; i++){
+                TypedGeneratedValue.Type type = typeAt(i);
+                switch(type){
+                    case Integer:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Double:
+                        values.getDouble(i * 9 + 1);
+                        break;
+                    case String:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Boolean:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Byte:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Char:
+                        values.getChar(i * 9 + 1);
+                        break;
+                    case Float:
+                        values.getFloat(i * 9 + 1);
+                        break;
+                    case Long:
+                        values.getLong(i * 9 + 1);
+                        break;
+                    case Short:
+                        values.getShort(i * 9 + 1);
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+            }
+        }
 
         @Override
         public int getOrGenerateFresh(Integer key, Random random) {
-            // Otherwise, make sure we are requesting just beyond the end-of-list
-            // assert (key == values.size());
-            if (key != requested) {
-                throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            // Don't generate over the limit
-            if (requested >= MAX_INPUT_SIZE) {
-                return -1;
-            }
-
-            // If it exists in the list, return it
-            if (key < values.size()) {
-                requested++;
-                // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                return values.get(key);
-            }
-
-            // Handle end of stream
-            if (GENERATE_EOF_WHEN_OUT) {
-                return -1;
-            } else {
-                // Just generate a random input
-                int val = random.nextInt(256);
-                values.add(val);
-                requested++;
-                // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
-                return val;
-            }
+            throw new UnsupportedOperationException("getOrGenerateFresh is not supported for LinearInput");
         }
 
+        public int position(){
+            return values.position();
+        }
+        public void mark(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
+            }
+            values.mark();
+        }
+        public void reset(){
+            values.reset();
+        }
         @Override
         public int size() {
-            return values.size();
+            return this.numValues * 9;
         }
-
         /**
          * Truncates the input list to remove values that were never actually requested.
          *
@@ -1486,14 +1508,7 @@ public class ZestGuidance implements Guidance {
          */
         @Override
         public void gc() {
-            // Remove elements beyond "requested"
-            values = new ArrayList<>(values.subList(0, requested));
-            values.trimToSize();
-
-            // Inputs should not be empty, otherwise mutations don't work
-            if (values.isEmpty()) {
-                throw new IllegalArgumentException("Input is either empty or nothing was requested from the input generator.");
-            }
+            //TODO
         }
 
         @Override
@@ -1508,7 +1523,7 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, MEAN_MUTATION_COUNT);
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues/10));
             newInput.desc += ",havoc:"+numMutations;
 
             boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
@@ -1516,67 +1531,229 @@ public class ZestGuidance implements Guidance {
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(newInput.values.size());
-                int mutationSize = sampleGeometric(random, MEAN_MUTATION_SIZE);
-
+                int offset = random.nextInt(newInput.numValues);
                 // desc += String.format(":%d@%d", mutationSize, idx);
-
-                // Mutate a contiguous set of bytes from offset
-                for (int i = offset; i < offset + mutationSize; i++) {
-                    // Don't go past end of list
-                    if (i >= newInput.values.size()) {
+                TypedGeneratedValue.Type type = newInput.typeAt(offset);
+                switch(type){
+                    case Integer:
+                        newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
                         break;
-                    }
-
-                    // Otherwise, apply a random mutation
-                    int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                    newInput.values.set(i, mutatedValue);
+                    case Double:
+                        newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
+                        break;
+                    case String:
+                        newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
+                        break;
+                    case Boolean:
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextBoolean() ? 1 : 0));
+                        break;
+                    case Byte:
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    case Char:
+                        newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    case Float:
+                        newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
+                        break;
+                    case Long:
+                        newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
+                        break;
+                    case Short:
+                        newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
                 }
             }
-
             return newInput;
         }
 
-        @Override
         public Iterator<Integer> iterator() {
-            return values.iterator();
+            throw new UnsupportedOperationException("WIP");
+        }
+
+        public void writeTo(DataOutputStream out) throws IOException{
+            this.values.rewind();
+            out.writeInt(this.numValues);
+            for(int i = 0; i < this.numValues * 9; i++){
+                out.writeByte(values.get(i));
+            }
+            this.values.rewind();
+        }
+
+        public TypedGeneratedValue.Type typeAt(int idx) {
+            return TypedGeneratedValue.Type.values()[values.get(idx * 9)];
+        }
+
+        public ByteBuffer getValues() {
+            return values;
+        }
+
+        private void checkPositionDebug(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
+            }
+        }
+        public int getInt(){
+            int ret = values.getInt();
+            values.position(values.position() + 4);
+            checkPositionDebug();
+            return ret;
+        }
+        public long getLong(){
+            long ret = values.getLong();
+            checkPositionDebug();
+            return ret;
+        }
+        public boolean getBoolean(){
+            boolean ret = values.get() == 1;
+            values.position(values.position() + 7);
+            checkPositionDebug();
+            return ret;
+        }
+        public void advance(){
+            numValues++;
+        }
+        public void addInt(int value) {
+            values.put((byte) TypedGeneratedValue.Type.Integer.ordinal());
+            values.putInt(value);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+        }
+
+        public void addLong(long value) {
+            values.put((byte) TypedGeneratedValue.Type.Long.ordinal());
+            values.putLong(value);
+            checkPositionDebug();
+
+        }
+
+        public void addFloat(float value) {
+            values.put((byte) TypedGeneratedValue.Type.Float.ordinal());
+            values.putFloat(value);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+
+        }
+
+        //And the rest of the types:
+        public void addDouble(double value) {
+            checkPositionDebug();
+            values.put((byte) TypedGeneratedValue.Type.Double.ordinal());
+            values.putDouble(value);
+            checkPositionDebug();
+
+        }
+
+        public void addByte(byte value) {
+            values.put((byte) TypedGeneratedValue.Type.Byte.ordinal());
+            values.put(value);
+            values.position(values.position() + 7);
+            checkPositionDebug();
+
+        }
+
+        public void addShort(short value) {
+            values.put((byte) TypedGeneratedValue.Type.Short.ordinal());
+            values.putShort(value);
+            values.position(values.position() + 6);
+            checkPositionDebug();
+
+        }
+
+        public void addChar(char value) {
+            values.put((byte) TypedGeneratedValue.Type.Char.ordinal());
+            values.putChar(value);
+            values.position(values.position() + 6);
+            checkPositionDebug();
+
+        }
+
+        public void addBoolean(boolean value) {
+            values.put((byte) TypedGeneratedValue.Type.Boolean.ordinal());
+            values.put(value ? (byte) 1 : (byte) 0);
+            values.position(values.position() + 7);
+            checkPositionDebug();
+
+        }
+
+        public void addString(int idx) {
+            values.put((byte) TypedGeneratedValue.Type.String.ordinal());
+            values.putInt(idx);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+
+        }
+
+        public void skipTo(int to){
+            values.position(to);
+            checkPositionDebug();
+        }
+
+        public void clearAfter(int bytesInInputNotIndex) {
+            numValues = (bytesInInputNotIndex) / 9;
+            numValues++;
+        }
+
+        public TypedGeneratedValue.Type nextType() {
+            checkPositionDebug();
+            int tmp = values.get();
+            if(tmp == 0){
+                throw new GuidanceException("Invalid type at position " + values.position());
+            }
+            return TypedGeneratedValue.Type.values()[tmp];
+        }
+
+        public byte getByte() {
+            byte ret = values.get();
+            values.position(values.position() + 7);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public char getChar() {
+            char ret = values.getChar();
+            values.position(values.position() + 6);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public short getShort() {
+            short ret = values.getShort();
+            values.position(values.position() + 6);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public float getFloat() {
+            float ret = values.getFloat();
+            values.position(values.position() + 4);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public double getDouble() {
+            double ret = values.getDouble();
+            checkPositionDebug();
+            return ret;
         }
     }
 
     public class SeedInput extends LinearInput {
         final File seedFile;
-        final InputStream in;
+        final DataInputStream in;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
-            this.in = new BufferedInputStream(new FileInputStream(seedFile));
+            this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
-        }
-
-        @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
-            int value;
-            try {
-                value = in.read();
-            } catch (IOException e) {
-                throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
-
+            this.numValues = this.in.readInt();
+            for(int i = 0; i < this.numValues * 9; i++){
+                values.put(this.in.readByte());
             }
-
-            // assert (key == values.size())
-            if (key != values.size() && value != -1) {
-                throw new IllegalStateException(String.format("Bytes from seed out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            if (value >= 0) {
-                requested++;
-                values.add(value);
-            }
-
-            // If value is -1, then it is returned (as EOF) but not added to the list
-            return value;
+            values.rewind();
         }
 
         @Override

@@ -4,6 +4,7 @@ import com.pholser.junit.quickcheck.generator.GenerationStatus;
 import de.hub.se.jqf.bedivfuzz.junit.quickcheck.tracking.SplitTrackingSourceOfRandomness;
 import de.hub.se.jqf.bedivfuzz.junit.quickcheck.tracking.Choice;
 import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
 import edu.berkeley.cs.jqf.fuzz.junit.quickcheck.NonTrackingGenerationStatus;
 import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
@@ -146,7 +147,7 @@ public class BeDivFuzzGuidance extends ZestGuidance {
         protected int valueCount = 0;
 
         public TrackingInput(LinearInput baseInput) {
-            this.values = baseInput.values;
+            super(baseInput);
         }
 
         public void incrementScore() {
@@ -214,23 +215,40 @@ public class BeDivFuzzGuidance extends ZestGuidance {
                 // Select a random offset and size
                 Choice choice = choices.get(random.nextInt(choices.size()));
                 int baseIdx = choice.getOffset();
-                int size = choice.getSize();
-
-                /**
-                 * For boolean choices, only the lowest bit is actually used (see {@link StreamBackedRandom#next(int bits)}.
-                 * Thus, when mutating this choice we actually have to flip that bit, otherwise there is a 50% chance
-                 * we end up with the same choice after mutation.
-                 */
-                if (size == -1) {
-                    int mutatedValue = values.get(baseIdx) ^ 1;
-                    newInput.values.set(baseIdx, mutatedValue);
-                } else {
-                    // Don't go over bound of choice
-                    int mutationSize = Math.min(sampleGeometric(random, MEAN_MUTATION_SIZE), size);
-                    for (int offset = 0; offset < mutationSize; offset++) {
-                        int mutatedValue = setToZero ? 0 : random.nextInt(256);
-                        newInput.values.set(baseIdx + offset, mutatedValue);
-                    }
+                // Select a random offset and size
+                int offset = random.nextInt(newInput.numValues);
+                // desc += String.format(":%d@%d", mutationSize, idx);
+                TypedGeneratedValue.Type type = newInput.typeAt(offset);
+                switch(type){
+                    case Integer:
+                        newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
+                        break;
+                    case Double:
+                        newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
+                        break;
+                    case String:
+                        newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
+                        break;
+                    case Boolean:
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextBoolean() ? 1 : 0));
+                        break;
+                    case Byte:
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    case Char:
+                        newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    case Float:
+                        newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
+                        break;
+                    case Long:
+                        newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
+                        break;
+                    case Short:
+                        newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
                 }
             }
             return newInput;
