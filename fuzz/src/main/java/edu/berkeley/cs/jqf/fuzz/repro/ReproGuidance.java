@@ -47,6 +47,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -166,7 +168,7 @@ public class ReproGuidance implements Guidance {
     public InputStream getInput() {
         try {
             File inputFile = inputFiles[nextFileIdx];
-            this.inputStream = new BufferedInputStream(new FileInputStream(inputFile));
+            this.inputStream = new TypedInputStream(new ZestGuidance.SeedInput(inputFile), null);
 
             if (allBranchesCovered != null) {
                 branchesCoveredInCurrentRun.clear();

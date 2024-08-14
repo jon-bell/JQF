@@ -303,7 +303,7 @@ public class ZestGuidance implements Guidance {
     protected final int NUM_CHILDREN_MULTIPLIER_FAVORED = 20;
 
     /** Mean number of mutations to perform in each round. */
-    protected final double MEAN_MUTATION_COUNT = 8.0;
+    protected static final double MEAN_MUTATION_COUNT = 8.0;
 
     /** Mean number of contiguous bytes to mutate in each mutation. */
     protected final double MEAN_MUTATION_SIZE = 4.0; // Bytes
@@ -1415,7 +1415,7 @@ public class ZestGuidance implements Guidance {
         }
     }
 
-    public class LinearInput extends Input<Integer> {
+    public static class LinearInput extends Input<Integer> {
 
         public ByteBuffer values;
         public int numValues;
@@ -1740,7 +1740,7 @@ public class ZestGuidance implements Guidance {
         }
     }
 
-    public class SeedInput extends LinearInput {
+    public static class SeedInput extends LinearInput {
         final File seedFile;
         final DataInputStream in;
 
