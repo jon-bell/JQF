@@ -1,0 +1,8 @@
+name: Eval 3h-20x
+on: workflow_dispatch
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluation-workflow.yml
+    with:
+      duration: 3h
+      trials: 20
