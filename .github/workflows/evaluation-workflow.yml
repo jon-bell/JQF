@@ -284,3 +284,4 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           comparisons: ${{ steps.fetch-compare.outputs.workflow_runs }}
+          benchmarks: ant,bcel,closure,maven,rhino,chocopy,nashorn,pngj,tomcat

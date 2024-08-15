@@ -42,10 +42,21 @@ if [ -f $ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.10.jar ]; then
   mvn -q dependency:copy -Dartifact=org.jacoco:org.jacoco.core:0.8.7 -DoutputDirectory=$ROOT_DIR/examples/target/dependency/
 fi
 echo $JACOCO_JAR
-# Chocopy contains a copy of ant, so we need to exclude it when processing coverage for ant...
-rm -f $ROOT_DIR/examples/target/dependency/chocopy*
 
-export CLASSPATH="$ROOT_DIR/examples/target/classes/:$ROOT_DIR/examples/target/test-classes/:$ROOT_DIR/examples/target/dependency/*"
+cp="$ROOT_DIR/examples/target/classes:$ROOT_DIR/examples/target/test-classes"
+for jar in $ROOT_DIR/examples/target/dependency/*.jar; do
+  # if $class is ant and jar is chocopy, skip it
+  if [ "$class" = "edu.berkeley.cs.jqf.examples.chocopy.SemanticAnalysisTest" ] && [[ $jar == *"ant"* ]]; then
+    continue
+  fi
+  # if class is chocopy and jar is ant, skip it
+  if [ "$class" = "edu.berkeley.cs.jqf.examples.ant.ProjectBuilderTest" ] && [[ $jar == *"chocopy"* ]]; then
+    continue
+  fi
+  cp="$cp:$jar"
+done
+
+export CLASSPATH=$cp
 export JVM_OPTS="-javaagent:$JACOCO_JAR=destfile=$3,includes=$4"
 
 "$ROOT_DIR/bin/jqf-repro" $args "$class" "$method" "${@:5}"
