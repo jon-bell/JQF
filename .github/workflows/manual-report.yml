@@ -1,0 +1,34 @@
+name: Manually generate a report
+on:
+  workflow_dispatch:
+    inputs:
+      report_on_branches:
+        description: "Comma-separated list of branches to report on"
+        required: true
+        type: string
+      workflow_id:
+        description: "ID of the workflow to run report on"
+        required: true
+        type: string
+jobs:
+  build-site:
+    runs-on: self-hosted
+    env:
+      RENV_PATHS_ROOT: /ci-logs/renv
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'jon-bell/fuzzing-build-site-action'
+          ref: 'v2'
+      - name: Fetch workflow runs to compare to
+        id: fetch-compare
+        uses: jon-bell/list-workflow-runs-by-branch-action@main
+        with:
+          include_branches: ${{ inputs.report_on_branches}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build site
+        uses: jon-bell/fuzzing-build-site-action@v2
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          comparisons: ${{ steps.fetch-compare.outputs.workflow_runs }}
+          benchmarks: ant,bcel,closure,maven,rhino,chocopy,nashorn,pngj,tomcat
