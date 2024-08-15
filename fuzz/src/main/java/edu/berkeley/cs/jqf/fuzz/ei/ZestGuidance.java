@@ -1294,19 +1294,9 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            //TODO
-//            if(requested + 1 < numValues) {
-////                values = new ArrayList<>(values.subList(0, requested + 1));
-////                values.trimToSize();
-//                numValues = requested + 1;
-//            }
-
-//            if(skippedIndices != null){
-//                //Delete values at skipped indices
-//                for(int i = skippedIndices.size() - 1; i >= 0; i--){
-//                    values.remove(skippedIndices.get(i));
-//                }
-//            }
+            if(values.position() < numValues * 9){
+                numValues = values.position() / 9;
+            }
 
             // Inputs should not be empty, otherwise mutations don't work
             if (numValues == 0) {
