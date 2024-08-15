@@ -32,21 +32,27 @@ if [ ! -f $JACOCO_UTIL_JAR ]; then
    mvn -q dependency:copy -Dartifact=fun.jvm.jacoco:jacoco-utils:1.0-SNAPSHOT -DoutputDirectory=$ROOT_DIR/target/
 fi
 
-# Chocopy contains a copy of ant, so we need to exclude it when processing coverage for ant...
-rm -f $ROOT_DIR/examples/target/dependency/chocopy*
+cp="$ROOT_DIR/examples/target/classes:$ROOT_DIR/examples/target/test-classes"
+for jar in $ROOT_DIR/examples/target/dependency/*.jar; do
+  # if $class is ant and jar is chocopy, skip it
+  if [ "$class" = "edu.berkeley.cs.jqf.examples.chocopy.SemanticAnalysisTest" ] && [[ $jar == *"ant"* ]]; then
+    continue
+  fi
+  # if class is chocopy and jar is ant, skip it
+  if [ "$class" = "edu.berkeley.cs.jqf.examples.ant.ProjectBuilderTest" ] && [[ $jar == *"chocopy"* ]]; then
+    continue
+  fi
+  cp="$cp:$jar"
+done
 
 export JACOCO_RUNNER_JAR=$ROOT_DIR/target/
 export CLASSPATH="$ROOT_DIR/examples/target/test-classes/"
 
-function join_by { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
-
-
-export deps=("$ROOT_DIR/examples/target/dependency/*")
-export expandedCP=$(join_by ":" $deps)
+export expandedCP=$cp
 
 
 if [ -d "$2" ]; then rm -Rf $2; fi
-export jacocoJars="$ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.10.jar:$ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.10.jar"
+export jacocoJars="$ROOT_DIR/examples/target/dependency/org.jacoco.report-0.8.7.jar:$ROOT_DIR/examples/target/dependency/org.jacoco.core-0.8.7.jar"
 export cmd="java -cp $JACOCO_UTIL_JAR:$jacocoJars -DJACOCO_SOURCES=$JACOCO_SOURCES fun.jvm.jacoco.reachability.entry.TolerantJacocoReportBuilder $1 $ROOT_DIR/examples/target/test-classes:$expandedCP $2 $3"
 
 COVERAGE_JSON=`$cmd | tail -n 1`
