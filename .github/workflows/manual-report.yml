@@ -26,6 +26,7 @@ jobs:
         with:
           include_branches: ${{ inputs.report_on_branches}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          workflow_id: ${{ inputs.workflow_id }}
       - name: Build site
         uses: jon-bell/fuzzing-build-site-action@v2
         with:
