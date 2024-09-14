@@ -799,8 +799,10 @@ public class ZestGuidance implements Guidance {
                 text += "-1";
             }
             text += ",";
+            if(distance == 0){
+                appendLineToFile(logFile, "Identical Mutant, input length="+currentInput.size() +", desc="+currentInput.desc);
+            }
             if (distance == 0 && SAVE_IDENTICAL_MUTATION) {
-//                System.out.println("Identical mutation found");
                 String saveFileName = String.format("id_%06d", identicalMutationIndex);
                 File saveFile = new File(identicalMutationDirectory, saveFileName);
                 try {
@@ -1449,38 +1451,62 @@ public class ZestGuidance implements Guidance {
                 int offset = random.nextInt(newInput.numValues);
                 // desc += String.format(":%d@%d", mutationSize, idx);
                 TypedGeneratedValue.Type type = newInput.typeAt(offset);
+                newInput.desc += ",@"+offset+"("+type.name()+(setToZero ? "-TO-ZERO":"");
 //                System.out.println(type);
                 switch(type){
                     case Integer:
+                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
                         newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
+                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
                         break;
                     case Double:
+                        newInput.desc += "-WAS:"+newInput.values.getDouble(offset * 9 + 1);
                         newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
+                        newInput.desc += "-NOW:"+newInput.values.getDouble(offset * 9 + 1);
                         break;
                     case String:
+                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
                         newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
+                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
                         break;
                     case Boolean:
-                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextBoolean() ? 1 : 0));
+                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
+                        if(newInput.values.get(offset * 9 + 1) == 0){
+                            newInput.values.put(offset * 9 + 1, (byte) 1);
+                        } else {
+                            newInput.values.put(offset * 9 + 1, (byte) 0);
+                        }
+                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
                         break;
                     case Byte:
+                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
                         newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
                         break;
                     case Char:
+                        newInput.desc += "-WAS:"+newInput.values.getChar(offset * 9 + 1);
                         newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.getChar(offset * 9 + 1);
                         break;
                     case Float:
+                        newInput.desc += "-WAS:"+newInput.values.getFloat(offset * 9 + 1);
                         newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
+                        newInput.desc += "-NOW:"+newInput.values.getFloat(offset * 9 + 1);
                         break;
                     case Long:
+                        newInput.desc += "-WAS:"+newInput.values.getLong(offset * 9 + 1);
                         newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
+                        newInput.desc += "-NOW:"+newInput.values.getLong(offset * 9 + 1);
                         break;
                     case Short:
+                        newInput.desc += "-WAS:"+newInput.values.getShort(offset * 9 + 1);
                         newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.getShort(offset * 9 + 1);
                         break;
                     default:
                         throw new UnsupportedOperationException();
                 }
+                newInput.desc += ")";
             }
             return newInput;
         }
