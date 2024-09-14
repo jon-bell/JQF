@@ -33,6 +33,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -84,15 +85,9 @@ public class ProjectBuilderTest {
 
     @Fuzz
     public void testWithGenerator(@From(XmlDocumentGenerator.class)
-                                      @Dictionary("dictionaries/ant-project.dict") Document dom) {
-        testWithInputStream(XMLDocumentUtils.documentToInputStream(dom));
-    }
+                                      @Dictionary("dictionaries/ant-project.dict") String dom) {
+        testWithInputStream(new ByteArrayInputStream(dom.getBytes(StandardCharsets.UTF_8)));
 
-    @Fuzz
-    public void debugWithGenerator(@From(XmlDocumentGenerator.class)
-                                       @Dictionary("dictionaries/ant-project.dict") Document dom) {
-        System.out.println(XMLDocumentUtils.documentToString(dom));
-        testWithGenerator(dom);
     }
 
     @Fuzz
