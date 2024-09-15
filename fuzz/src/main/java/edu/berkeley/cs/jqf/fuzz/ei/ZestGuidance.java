@@ -1438,7 +1438,7 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT*4, newInput.numValues/10));
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues/10));
             newInput.desc += ",havoc:"+numMutations;
 
             boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
