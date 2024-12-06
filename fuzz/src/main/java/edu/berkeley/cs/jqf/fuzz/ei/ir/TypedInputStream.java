@@ -50,24 +50,9 @@ public class TypedInputStream extends InputStream {
                 return input.getDouble();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Double);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    if (input.nextType() != TypedGeneratedValue.Type.Double) {
-                        throw new GuidanceException("Expected double, got " + input.nextType());
-                    }
-                    input.numAlignments++;
-                    return input.getDouble();
-                }
                 double ret = random.nextDouble();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addDouble(ret);
                 return ret;
             }
@@ -93,24 +78,7 @@ public class TypedInputStream extends InputStream {
                 input.reset();
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Long);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    if (input.nextType() != TypedGeneratedValue.Type.Long) {
-                        throw new GuidanceException("Expected long, got " + input.nextType());
-                    }
-                    input.numAlignments++;
-                    return input.getValues().getLong();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 long ret = random.nextLong();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addLong(ret);
                 return ret;
             }
@@ -123,20 +91,6 @@ public class TypedInputStream extends InputStream {
         }
     }
 
-    private int getIdxOfNextValWithType(TypedGeneratedValue.Type type) {
-        int maxScanPosition = Math.min(input.size(),  input.position() + SCAN_FORWARD_LIMIT*9);//position in bytes!
-        for (int i = input.position() + 9; i < maxScanPosition; i+=9) {
-            TypedGeneratedValue.Type next = TypedGeneratedValue.Type.values()[input.getValues().get(i)];
-            if(next == TypedGeneratedValue.Type.INVALID){
-                throw new GuidanceException("Invalid type found in input stream");
-            }
-            if (next == type) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     private int _readInt(TypedGeneratedValue.Type typ) throws IOException {
         checkForEOF();
         if (input.position() < input.size()) {
@@ -146,27 +100,9 @@ public class TypedInputStream extends InputStream {
                 return input.getInt();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(typ);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    if (input.nextType() != typ) {
-                        throw new GuidanceException("Expected " + typ + ", got " + input.nextType());
-                    }
-                    input.numAlignments++;
-                    return input.getInt();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 int ret = random.nextInt();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 if (typ == TypedGeneratedValue.Type.Integer) {
                     input.addInt(ret);
                 } else if (typ == TypedGeneratedValue.Type.String) {
@@ -204,25 +140,9 @@ public class TypedInputStream extends InputStream {
                 return input.getByte();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Byte);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    assert (input.nextType() == TypedGeneratedValue.Type.Byte);
-                    input.numAlignments++;
-                    return input.getByte();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 byte ret = (byte) random.nextInt(256);
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addByte(ret);
                 return ret;
             }
@@ -248,24 +168,7 @@ public class TypedInputStream extends InputStream {
                 // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Boolean);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    if(input.nextType() != TypedGeneratedValue.Type.Boolean){
-                        throw new GuidanceException("Expected boolean, got " + input.nextType());
-                    }
-                    input.numAlignments++;
-                    return input.getBoolean();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 boolean ret = random.nextBoolean();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addBoolean(ret);
                 return ret;
             }
@@ -293,26 +196,9 @@ public class TypedInputStream extends InputStream {
                 return input.getChar();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Char);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    assert (input.nextType() == TypedGeneratedValue.Type.Char);
-                    input.numAlignments++;
-                    return input.getChar();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 char ret = (char) random.nextInt();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
-                input.getValues().reset();
                 input.addChar(ret);
                 return ret;
             }
@@ -335,25 +221,9 @@ public class TypedInputStream extends InputStream {
                 return input.getFloat();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Float);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    assert (input.nextType() == TypedGeneratedValue.Type.Float);
-                    input.numAlignments++;
-                    return input.getFloat();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 float ret = random.nextFloat();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addFloat(ret);
                 return ret;
             }
@@ -376,25 +246,9 @@ public class TypedInputStream extends InputStream {
                 return input.getShort();
             } else {
                 input.reset();
-                // Scan forward for the next value of the correct type
                 input.misAlignments++;
                 input.misAlignmentsThisRun++;
-                int idx = getIdxOfNextValWithType(TypedGeneratedValue.Type.Short);
-                if (idx != -1) {
-                    input.skipTo(idx);
-                    assert (input.nextType() == TypedGeneratedValue.Type.Short);
-                    input.numAlignments++;
-                    return input.getShort();
-                }
-                // If we reach here, we didn't find a value of the correct type
-                // Generate a new value and insert it here in the input
-                // TODO consider instead replacing the next value? experiment?
                 short ret = (short) random.nextInt();
-                if (input.misAlignmentsThisRun > SCAN_DISCARD_LIMIT) {
-                    input.misAlignmentsThisRun = 0;
-                    // We are misaligned too much, discard the rest of the input
-                    input.clearAfter(input.position());
-                }
                 input.addShort(ret);
                 return ret;
             }
@@ -409,7 +263,6 @@ public class TypedInputStream extends InputStream {
     }
 
     private static final int SCAN_FORWARD_LIMIT = 100;
-    private static final int SCAN_DISCARD_LIMIT = 5;
 
     private TypedGeneratedValue readValue(TypedGeneratedValue.Type type) {
         throw new UnsupportedOperationException("Not implemented");
