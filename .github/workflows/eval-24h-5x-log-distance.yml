@@ -1,0 +1,9 @@
+name: Thin evaluation - 24 hours, 5 trials
+on: workflow_dispatch
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluation-workflow.yml
+    with:
+      duration: 24h
+      trials: 5
+      JVM_OPTS: -Djqf.ei.OBSERVE_MUTATION_DISTANCE=true
