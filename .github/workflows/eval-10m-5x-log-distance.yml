@@ -1,4 +1,4 @@
-name: Smoke test evaluation - 10 minutes, 5 trials
+name: Smoke test evaluation - 10 minutes, 5 trials with distance log
 on: [push, pull_request]
 jobs:
   evaluate:
