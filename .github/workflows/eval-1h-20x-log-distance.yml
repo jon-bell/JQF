@@ -1,4 +1,4 @@
-name: Eval 1h-20x
+name: Eval 1h-20x with distance log
 on: workflow_dispatch
 jobs:
   evaluate:
