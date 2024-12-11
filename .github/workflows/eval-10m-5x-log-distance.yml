@@ -1,0 +1,9 @@
+name: Smoke test evaluation - 10 minutes, 5 trials with distance log
+on: [push, pull_request]
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluation-workflow.yml
+    with:
+      duration: 10m
+      trials: 5
+      JVM_OPTS: -Djqf.ei.OBSERVE_MUTATION_DISTANCE=true

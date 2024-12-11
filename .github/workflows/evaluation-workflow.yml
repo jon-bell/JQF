@@ -15,7 +15,7 @@ on:
       report_on_branches:
         description: Other branches to include in the report
         required: false
-        default: ci,fuzz-ir,fuzz-ir-skip-ahead-perf
+        default: ci,fuzz-ir,fuzz-ir-skip-ahead-perf,fuzz-ir-perf-no-skip
         type: string
       fuzzer_to_invoke:
         description: Path to script to invoke for fuzzing run, defaults to ./bin/jqf-zest
@@ -196,22 +196,22 @@ jobs:
           find fuzz-results -maxdepth 1 -type f \( -iname \*.csv -o -iname \*.log \) -exec sh -c 'cp {} "$RESULTS_DIR/${{ matrix.config.id }}_$(basename {})_${{ matrix.config.runNumber }}"' \;
 
       - name: Archive Fuzz Logs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
           name: ${{ matrix.config.id }}_${{ matrix.config.runNumber }}_fuzz_logs
       - name: Archive Corpus
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           path: ${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}.tgz
           name: archive_${{ matrix.config.id }}_corpus_${{ matrix.config.runNumber }}.tgz
       - name: Archive Failures
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
          path: ${{ matrix.config.id }}_failures_${{ matrix.config.runNumber }}.tgz
          name: archive_${{ matrix.config.id }}_failures_${{ matrix.config.runNumber }}.tgz
       - name: Archive Plot Data
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
          path: ${{ matrix.config.id }}_plot_data_${{ matrix.config.runNumber }}
          name: ${{ matrix.config.id }}_plot_data_${{ matrix.config.runNumber }}
@@ -227,7 +227,7 @@ jobs:
       JAVA_HOME: ${{ inputs.java_home }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
       - id: repro
         name: Repro
         run: |
@@ -284,4 +284,4 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           comparisons: ${{ steps.fetch-compare.outputs.workflow_runs }}
-          benchmarks: ant,bcel,closure,maven,rhino,chocopy,nashorn,pngj,tomcat
+          benchmarks: ant,bcel,closure,maven,rhino
