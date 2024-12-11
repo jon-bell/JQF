@@ -30,6 +30,7 @@
 package edu.berkeley.cs.jqf.fuzz.ei;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -241,10 +242,10 @@ public class ZestGuidance implements Guidance {
     protected final boolean SAVE_ONLY_VALID = Boolean.getBoolean("jqf.ei.SAVE_ONLY_VALID");
 
     /** Max input size to generate. */
-    protected final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
+    protected static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
-    protected final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
+    protected static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
     /** Baseline number of mutated children to produce from a given parent input. */
     protected final int NUM_CHILDREN_BASELINE = 50;
@@ -253,10 +254,10 @@ public class ZestGuidance implements Guidance {
     protected final int NUM_CHILDREN_MULTIPLIER_FAVORED = 20;
 
     /** Mean number of mutations to perform in each round. */
-    protected final double MEAN_MUTATION_COUNT = 8.0;
+    protected static final double MEAN_MUTATION_COUNT = 8.0;
 
     /** Mean number of contiguous bytes to mutate in each mutation. */
-    protected final double MEAN_MUTATION_SIZE = 4.0; // Bytes
+    protected static final double MEAN_MUTATION_SIZE = 4.0; // Bytes
 
     /** Whether to save inputs that only add new coverage bits (but no new responsibilities). */
     protected final boolean DISABLE_SAVE_NEW_COUNTS = Boolean.getBoolean("jqf.ei.DISABLE_SAVE_NEW_COUNTS");
@@ -1315,10 +1316,11 @@ public class ZestGuidance implements Guidance {
         public abstract void writeTo(BufferedOutputStream out) throws IOException;
     }
 
-    public class LinearInput extends Input<Integer> {
+    public static class LinearInput extends Input<Integer> {
 
         /** A list of byte values (0-255) ordered by their index. */
-        protected ByteArrayList values;
+        protected ByteBuffer values;
+        protected int numValues;
 
         /** The number of bytes requested so far */
         protected int requested = 0;
@@ -1329,12 +1331,18 @@ public class ZestGuidance implements Guidance {
 
         public LinearInput() {
             super();
-            this.values = new ByteArrayList();
+            this.values = ByteBuffer.allocate(MAX_INPUT_SIZE);
         }
 
         public LinearInput(LinearInput other) {
             super(other);
             this.parent = other;
+            this.values = ByteBuffer.allocate(other.values.capacity());
+            this.numValues = other.numValues;
+            other.values.rewind();
+            this.values.put(other.values);
+            other.values.rewind();
+            this.values.rewind();
         }
 
         @Override
@@ -1372,46 +1380,23 @@ public class ZestGuidance implements Guidance {
         }
 
         private void add(byte b) {
-            if (!dirty) {
-                dirty = true;
-                if (this.parent == null) {
-                    values = new ByteArrayList();
-                } else {
-                    values = new ByteArrayList(this.parent.values.toArray());
-                }
-            }
-            values.add(b);
+            values.put(b);
+            numValues++;
         }
 
         private void set(int pos, byte b) {
-            if (!dirty) {
-                dirty = true;
-                if (this.parent == null) {
-                    values = new ByteArrayList();
-                } else {
-                    values = new ByteArrayList(this.parent.values.toArray());
-                }
-            }
-            values.set(pos, b);
+            values.put(pos, b);
         }
 
         private int get(int pos) {
-            if (this.dirty) {
-                return Byte.toUnsignedInt(values.get(pos));
-            } else {
-                return this.parent.get(pos);
-            }
+            int ret = Byte.toUnsignedInt(values.get(pos));
+            values.position(values.position() + 1);
+            return ret;
         }
 
         @Override
         public int size() {
-            if (this.dirty) {
-                return values.size();
-            } else if (this.parent == null) {
-                return 0;
-            } else {
-                return this.parent.size();
-            }
+            return numValues;
         }
 
         /**
@@ -1419,17 +1404,16 @@ public class ZestGuidance implements Guidance {
          *
          * <p>Although this operation mutates the underlying object, the effect should
          * not be externally visible (at least as long as the test executions are
-         * deterministic).</p>
+         * deterministic).</pe
          */
         @Override
         public void gc() {
-            // Remove elements beyond "requested"
-            byte[] newValues = new byte[requested];
-            System.arraycopy(values.toArray(), 0, newValues, 0, requested);
-            values = new ByteArrayList(newValues);
+            if(numValues > requested){
+                numValues = requested;
+            }
 
             // Inputs should not be empty, otherwise mutations don't work
-            if (values.isEmpty()) {
+            if (numValues == 0) {
                 throw new IllegalArgumentException("Input is either empty or nothing was requested from the input generator.");
             }
         }
@@ -1471,54 +1455,32 @@ public class ZestGuidance implements Guidance {
 
         @Override
         public void writeTo(BufferedOutputStream out) throws IOException {
-            out.write(this.values.toArray());
+            DataOutputStream dos = new DataOutputStream(out);
+            this.values.rewind();
+            dos.writeInt(this.numValues);
+            for(int i = 0; i < this.numValues; i++) {
+                dos.writeByte(this.values.get(i));
+            }
+            this.values.rewind();
         }
     }
 
-    public class SeedInput extends LinearInput {
+    public static class SeedInput extends LinearInput {
         final File seedFile;
-        final InputStream in;
+        final DataInputStream in;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
-            this.in = new BufferedInputStream(new FileInputStream(seedFile));
+            this.in = new DataInputStream(new FileInputStream(seedFile));
             this.desc = "seed";
-        }
-
-        @Override
-        public int getOrGenerateFresh(Integer key, Random random) {
-            int value;
-            try {
-                value = in.read();
-            } catch (IOException e) {
-                throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
-
+            this.numValues = this.in.readInt();
+            for(int i = 0; i < this.numValues; i++){
+                values.put(this.in.readByte());
             }
+            values.rewind();
+            this.in.close();
 
-            // assert (key == values.size())
-            if (key != values.size() && value != -1) {
-                throw new IllegalStateException(String.format("Bytes from seed out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            if (value >= 0) {
-                requested++;
-                values.add((byte) value);
-            }
-
-            // If value is -1, then it is returned (as EOF) but not added to the list
-            return value;
-        }
-
-        @Override
-        public void gc() {
-            super.gc();
-            try {
-                in.close();
-            } catch (IOException e) {
-                throw new GuidanceException("Error closing seed file:" + seedFile.getName(), e);
-            }
         }
 
     }

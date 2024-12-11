@@ -40,13 +40,10 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ZestGuidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
@@ -149,7 +146,17 @@ public class ReproGuidance implements Guidance {
     public InputStream getInput() {
         try {
             File inputFile = inputFiles[nextFileIdx];
-            this.inputStream = new BufferedInputStream(new FileInputStream(inputFile));
+            ZestGuidance.SeedInput input = new ZestGuidance.SeedInput(inputFile);
+            Random random = new Random(0);
+            this.inputStream = new InputStream() {
+                int bytesRead = 0;
+
+                @Override
+                public int read() throws IOException {
+
+                    return input.getOrGenerateFresh(bytesRead++, random);
+                }
+            };
 
             if (allBranchesCovered != null) {
                 branchesCoveredInCurrentRun.clear();
