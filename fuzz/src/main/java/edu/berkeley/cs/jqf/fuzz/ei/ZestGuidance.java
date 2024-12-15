@@ -800,9 +800,10 @@ public class ZestGuidance implements Guidance {
 
     private void logMutation(boolean saved) {
         String parentRaw =savedInputs.get(currentParentInputIdx).raw;
+        String text = "";
         if (currentRaw != null && parentRaw != null) {
             int distance = getLevenshteinDistFromString(currentRaw, parentRaw);
-            String text =  currentRaw.length() + "," +  parentRaw.length() + "," +
+            text =  currentRaw.length() + "," +  parentRaw.length() + "," +
                     distance + "," + saved + "," + currentParentInputIdx + ",";
             if (saved) {
                 text += Integer.toString(currentInput.id);
@@ -822,8 +823,31 @@ public class ZestGuidance implements Guidance {
             } else {
                 text += "-1";
             }
-            appendLineToFile(mutationLog, text);
+        } else {
+            text = "-1,-1,-1," + saved + "," + currentParentInputIdx + ",-1,";
         }
+        if(currentInput.coverage != null) {
+            //Also calculate number of probes shared between the two inputs
+            int sharedProbes = 0;
+            IntHashSet currentProbes = new IntHashSet();
+            currentProbes.addAll(currentInput.coverage.getCovered());
+            IntHashSet parentProbes = new IntHashSet();
+            parentProbes.addAll(savedInputs.get(currentParentInputIdx).coverage.getCovered());
+            IntIterator currentProbesIterator = currentProbes.intIterator();
+            while (currentProbesIterator.hasNext()) {
+                int probe = currentProbesIterator.next();
+                if (parentProbes.contains(probe)) {
+                    sharedProbes++;
+                }
+            }
+            // Calculate the total number of probes covered by the two inputs
+            int totalProbes = currentProbes.size() + parentProbes.size() - sharedProbes;
+            text += "," + sharedProbes + "," + currentProbes.size() + "," + parentProbes.size() + "," + totalProbes;
+        }
+        else {
+            text += ",,,";
+        }
+        appendLineToFile(mutationLog, text);
     }
 
     @Override

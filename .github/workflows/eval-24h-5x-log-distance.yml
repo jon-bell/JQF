@@ -1,4 +1,4 @@
-name: Thin evaluation - 24 hours, 5 trials
+name: Thin evaluation - 24 hours, 5 trials with distance log
 on: workflow_dispatch
 jobs:
   evaluate:
