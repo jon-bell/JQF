@@ -1,0 +1,8 @@
+name: Small Evaluation - 5 minutes, 20 trials
+on: workflow_dispatch
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluation-workflow.yml
+    with:
+      duration: 5m
+      trials: 20
