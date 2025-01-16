@@ -39,6 +39,7 @@ import java.util.List;
 import com.pholser.junit.quickcheck.generator.GenerationStatus;
 import com.pholser.junit.quickcheck.generator.Generator;
 import com.pholser.junit.quickcheck.random.SourceOfRandomness;
+import edu.berkeley.cs.jqf.fuzz.junit.quickcheck.FastSourceOfRandomness;
 
 public class DictionaryBackedStringGenerator extends Generator<String> {
 
@@ -66,15 +67,16 @@ public class DictionaryBackedStringGenerator extends Generator<String> {
 
     @Override
     public String generate(SourceOfRandomness random, GenerationStatus status) {
-        if (true) {
-            int choice = random.nextInt(dictionary.size());
-            return dictionary.get(choice);
-        } else {
-            if (fallback == null) {
-                fallback = gen().type(String.class);
-            }
-            return fallback.generate(random, status);
-        }
+//        if (true) {
+//            int choice = random.nextInt(dictionary.size());
+//            return dictionary.get(choice);
+//        } else {
+//            if (fallback == null) {
+//                fallback = gen().type(String.class);
+//            }
+//            return fallback.generate(random, status);
+//        }
+        return ((FastSourceOfRandomness) random).nextString(dictionary);
     }
 
 }

@@ -4,9 +4,11 @@ import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.StreamBackedRandom;
 
 import java.io.IOException;
+import java.util.List;
 
 public class TypedStreamBackedRandom extends StreamBackedRandom {
     private TypedInputStream inputStream;
+    private boolean firstLongHasBeenSkipped = false;
 
     public TypedStreamBackedRandom(TypedInputStream inputStream, int bytesToIgnore) {
         super(inputStream, bytesToIgnore);
@@ -52,6 +54,10 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     }
 
     public long nextLong() {
+        if(!firstLongHasBeenSkipped){
+            firstLongHasBeenSkipped = true;
+            return 0;
+        }
         try {
             return inputStream.readLong();
         } catch(IOException e){
@@ -77,6 +83,14 @@ public class TypedStreamBackedRandom extends StreamBackedRandom {
     public short nextShort() {
         try{
             return  inputStream.readShort();
+        } catch(IOException e){
+            throw new GuidanceException(e);
+        }
+    }
+
+    public String nextString(List<String> dictionary) {
+        try{
+            return inputStream.readString(dictionary);
         } catch(IOException e){
             throw new GuidanceException(e);
         }

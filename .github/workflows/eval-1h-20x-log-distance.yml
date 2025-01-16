@@ -1,0 +1,9 @@
+name: Eval 1h-20x with distance log
+on: workflow_dispatch
+jobs:
+  evaluate:
+    uses: ./.github/workflows/evaluation-workflow.yml
+    with:
+      duration: 1h
+      trials: 20
+      JVM_OPTS: -Djqf.ei.OBSERVE_MUTATION_DISTANCE=true

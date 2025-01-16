@@ -31,6 +31,7 @@ package edu.berkeley.cs.jqf.examples.maven;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import com.pholser.junit.quickcheck.From;
 import com.pholser.junit.quickcheck.generator.Size;
@@ -65,16 +66,8 @@ public class ModelReaderTest {
     @Fuzz
     public void testWithGenerator(@From(XmlDocumentGenerator.class)
                                       @Size(min = 0, max = 10)
-                                      @Dictionary("dictionaries/maven-model.dict") Document dom) {
-        testWithInputStream(XMLDocumentUtils.documentToInputStream(dom));
-    }
-
-    @Fuzz
-    public void debugWithGenerator(@From(XmlDocumentGenerator.class)
-                                       @Size(min = 0, max = 10)
-                                       @Dictionary("dictionaries/maven-model.dict") Document dom) {
-        System.out.println(XMLDocumentUtils.documentToString(dom));
-        testWithGenerator(dom);
+                                      @Dictionary("dictionaries/maven-model.dict") String dom) {
+        testWithInputStream(new ByteArrayInputStream(dom.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Fuzz

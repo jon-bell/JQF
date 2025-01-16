@@ -30,6 +30,7 @@ package edu.berkeley.cs.jqf.examples.tomcat;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import com.pholser.junit.quickcheck.From;
 import edu.berkeley.cs.jqf.examples.xml.XMLDocumentUtils;
@@ -58,14 +59,8 @@ public class WebXmlTest {
     }
 
     @Fuzz
-    public void testWithGenerator(@From(XmlDocumentGenerator.class) @Dictionary("dictionaries/tomcat-webxml.dict") Document dom) {
-        testWithInputStream(XMLDocumentUtils.documentToInputStream(dom));
-    }
-
-    @Fuzz
-    public void debugWithGenerator(@From(XmlDocumentGenerator.class) @Dictionary("dictionaries/tomcat-webxml.dict") Document dom) {
-        System.out.println(XMLDocumentUtils.documentToString(dom));
-        testWithGenerator(dom);
+    public void testWithGenerator(@From(XmlDocumentGenerator.class) @Dictionary("dictionaries/tomcat-webxml.dict") String dom) {
+        testWithInputStream(new ByteArrayInputStream(dom.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Fuzz

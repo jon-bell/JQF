@@ -29,6 +29,8 @@
  */
 package edu.berkeley.cs.jqf.fuzz.ei;
 
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
+import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -48,25 +50,20 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
-import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
 import edu.berkeley.cs.jqf.fuzz.guidance.Guidance;
 import edu.berkeley.cs.jqf.fuzz.guidance.GuidanceException;
 import edu.berkeley.cs.jqf.fuzz.guidance.Result;
 import edu.berkeley.cs.jqf.fuzz.guidance.TimeoutException;
-import edu.berkeley.cs.jqf.fuzz.util.Coverage;
-import edu.berkeley.cs.jqf.fuzz.util.CoverageFactory;
-import edu.berkeley.cs.jqf.fuzz.util.FastNonCollidingCoverage;
-import edu.berkeley.cs.jqf.fuzz.util.ICoverage;
-import edu.berkeley.cs.jqf.fuzz.util.IOUtils;
+import edu.berkeley.cs.jqf.fuzz.util.*;
 import edu.berkeley.cs.jqf.instrument.tracing.FastCoverageSnoop;
 import edu.berkeley.cs.jqf.instrument.tracing.events.TraceEvent;
 import janala.instrument.FastCoverageListener;
 import org.eclipse.collections.api.iterator.IntIterator;
 import org.eclipse.collections.api.list.primitive.IntList;
+import org.eclipse.collections.impl.list.mutable.primitive.IntArrayList;
 import org.eclipse.collections.impl.set.mutable.primitive.IntHashSet;
 
-import javax.sound.sampled.Line;
+import java.nio.ByteBuffer;
 
 import static java.lang.Math.ceil;
 import static java.lang.Math.log;
@@ -145,6 +142,11 @@ public class ZestGuidance implements Guidance {
      */
     protected int numSavedInputs = 0;
 
+    protected int numSavedInputsWithMisalignments = 0;
+    protected int numMisalignments = 0;
+    protected int numSavedAlignedInputs = 0;
+    protected int numAlignmentsInSavedInputs = 0;
+
     /** Coverage statistics for a single run. */
     protected ICoverage runCoverage = CoverageFactory.newInstance();
 
@@ -187,10 +189,13 @@ public class ZestGuidance implements Guidance {
     protected final long STATS_REFRESH_TIME_PERIOD = 300;
 
     /** The file where log data is written. */
-    protected File logFile;
+    protected PrintWriter logFile;
+
+    /** The file where log data is written. */
+    protected PrintWriter mutationLog;
 
     /** The file where saved plot data is written. */
-    protected File statsFile;
+    protected PrintWriter statsFile;
 
     /** The currently executing input (for debugging purposes). */
     protected File currentInputFile;
@@ -206,6 +211,10 @@ public class ZestGuidance implements Guidance {
 
     /** Whether to store all generated inputs to disk (can get slowww!) */
     protected final boolean LOG_ALL_INPUTS = Boolean.getBoolean("jqf.ei.LOG_ALL_INPUTS");
+
+    protected final boolean OBSERVE_MUTATION_DISTANCE = Boolean.getBoolean("jqf.ei.OBSERVE_MUTATION_DISTANCE");
+    protected final boolean SAVE_IDENTICAL_MUTATION = Boolean.getBoolean("jqf.ei.SAVE_IDENTICAL_MUTATION");
+
 
     // ------------- TIMEOUT HANDLING ------------
 
@@ -238,7 +247,7 @@ public class ZestGuidance implements Guidance {
     public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
     /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
-    protected static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
+    public static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
     /** Baseline number of mutated children to produce from a given parent input. */
     protected final int NUM_CHILDREN_BASELINE = 50;
@@ -257,6 +266,28 @@ public class ZestGuidance implements Guidance {
 
     /** Whether to steal responsibility from old inputs (this increases computation cost). */
     protected final boolean STEAL_RESPONSIBILITY = Boolean.getBoolean("jqf.ei.STEAL_RESPONSIBILITY");
+
+    protected String currentRaw = null;
+
+    protected int identicalMutationIndex = 0;
+    protected File identicalMutationDirectory;
+
+    @Override
+    public void observeGeneratedArgs(Object[] args) {
+        if (!OBSERVE_MUTATION_DISTANCE) {
+            return;
+        }
+
+        if (args.length != 1) {
+            return;
+        }
+
+        if (!(args[0] instanceof String)) {
+            return;
+        }
+        currentRaw = (String) args[0];
+    }
+
 
     /**
      * Creates a new Zest guidance instance with optional duration,
@@ -394,8 +425,9 @@ public class ZestGuidance implements Guidance {
             IOUtils.createDirectory(allInputsDirectory, "invalid");
             IOUtils.createDirectory(allInputsDirectory, "failure");
         }
-        this.statsFile = new File(outputDirectory, "plot_data");
-        this.logFile = new File(outputDirectory, "fuzz.log");
+        File statsFile = new File(outputDirectory, "plot_data");
+        File logFile = new File(outputDirectory, "fuzz.log");
+        File mutationLog = new File(outputDirectory, "mutation.log");
         this.currentInputFile = new File(outputDirectory, ".cur_input");
         this.coverageFile = new File(outputDirectory, "coverage_hash");
 
@@ -405,7 +437,23 @@ public class ZestGuidance implements Guidance {
         // We also do not check if the deletes are actually successful.
         statsFile.delete();
         logFile.delete();
+        mutationLog.delete();
         coverageFile.delete();
+
+        // Set up writers
+        this.statsFile = new PrintWriter(new BufferedWriter(new FileWriter(statsFile, true)));
+        this.logFile = new PrintWriter(new BufferedWriter(new FileWriter(logFile, true)));
+        this.mutationLog = new PrintWriter(new BufferedWriter(new FileWriter(mutationLog, true)));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                this.statsFile.close();
+                this.logFile.close();
+                this.mutationLog.close();
+            } catch (GuidanceException e) {
+                e.printStackTrace();
+            }
+        }));
+
         for (File file : savedCorpusDirectory.listFiles()) {
             file.delete();
         }
@@ -413,22 +461,17 @@ public class ZestGuidance implements Guidance {
             file.delete();
         }
 
-        appendLineToFile(statsFile, getStatNames());
+        appendLineToFile(this.statsFile, getStatNames());
     }
 
     protected String getStatNames() {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
-            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes";
+            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes,numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs";
     }
 
     /* Writes a line of text to a given log file. */
-    protected void appendLineToFile(File file, String line) throws GuidanceException {
-        try (PrintWriter out = new PrintWriter(new FileWriter(file, true))) {
-            out.println(line);
-        } catch (IOException e) {
-            throw new GuidanceException(e);
-        }
-
+    protected void appendLineToFile(PrintWriter writer, String line) throws GuidanceException {
+        writer.println(line);
     }
 
     /* Writes a line of text to the log file. */
@@ -521,6 +564,8 @@ public class ZestGuidance implements Guidance {
                 console.printf("Cycles completed:     %d\n", cyclesCompleted);
                 console.printf("Unique failures:      %,d\n", uniqueFailures.size());
                 console.printf("Queue size:           %,d (%,d favored last cycle)\n", savedInputs.size(), numFavoredLastCycle);
+                console.printf("Misaligned inputs:    %d (avg %d/input)\n", numSavedInputsWithMisalignments, numSavedInputsWithMisalignments > 0 ? numMisalignments / numSavedInputsWithMisalignments: 0);
+                console.printf("Realigned inputs:     %d (avg %d/input)\n", numSavedAlignedInputs, numSavedAlignedInputs > 0 ? numAlignmentsInSavedInputs / numSavedAlignedInputs: 0);
                 console.printf("Current parent input: %s\n", currentParentInputDesc);
                 console.printf("Execution speed:      %,d/sec now | %,d/sec overall\n", intervalExecsPerSec, execsPerSec);
                 console.printf("Total coverage:       %,d branches (%.2f%% of map)\n", nonZeroCount, nonZeroFraction);
@@ -528,10 +573,10 @@ public class ZestGuidance implements Guidance {
             }
         }
 
-        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d",
+        String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()), cyclesCompleted, currentParentInputIdx,
                 numSavedInputs, 0, 0, nonZeroFraction, uniqueFailures.size(), 0, 0, intervalExecsPerSecDouble,
-                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount);
+                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount, numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs);
         appendLineToFile(statsFile, plotData);
     }
 
@@ -710,6 +755,93 @@ public class ZestGuidance implements Guidance {
         }
     }
 
+    private int getLevenshteinDistFromString(String s1, String s2) {
+        if (s1.equals(s2)) {
+            return 0;
+        }
+        int n = s2.length();
+        int[] v0 = new int[n + 1];
+        int[] v1 = new int[n + 1];
+        for (int i = 0; i < s2.length() + 1; i++) {
+            v0[i] = i;
+        }
+        for (int i = 0; i < s1.length(); i++) {
+            v1[0] = i + 1;
+            for (int j = 0; j < s2.length(); j++) {
+                int deletionCost = v0[j + 1] + 1;
+                int insertionCost = v1[j] + 1;
+                int substitutionCost = 0;
+                if (s1.charAt(i) == s2.charAt(j)) {
+                    substitutionCost = v0[j];
+                } else {
+                    substitutionCost = v0[j] + 1;
+                }
+                int min = deletionCost < insertionCost ? deletionCost : insertionCost;
+                v1[j + 1] = min < substitutionCost ? min : substitutionCost;
+            }
+            // swap
+            int[] tmp = v0;
+            v0 = v1;
+            v1 = tmp;
+        }
+        return v0[n];
+    }
+
+    private void logMutation(boolean saved) {
+        String parentRaw =savedInputs.get(currentParentInputIdx).raw;
+        String text = "";
+        if (currentRaw != null && parentRaw != null) {
+            int distance = getLevenshteinDistFromString(currentRaw, parentRaw);
+            text =  currentRaw.length() + "," +  parentRaw.length() + "," +
+                    distance + "," + saved + "," + currentParentInputIdx + ",";
+            if (saved) {
+                text += Integer.toString(currentInput.id);
+            } else {
+                text += "-1";
+            }
+            text += ",";
+            if(distance == 0){
+                appendLineToFile(logFile, "Identical Mutant, input length="+currentInput.size() +", desc="+currentInput.desc);
+            }
+            if (distance == 0 && SAVE_IDENTICAL_MUTATION) {
+                String saveFileName = String.format("id_%06d", identicalMutationIndex);
+                File saveFile = new File(identicalMutationDirectory, saveFileName);
+                try {
+                    writeCurrentInputToFile(saveFile);
+                } catch (IOException e) {
+                }
+                text += saveFileName;
+                identicalMutationIndex += 1;
+            } else {
+                text += "-1";
+            }
+        } else {
+            text = "-1,-1,-1," + saved + "," + currentParentInputIdx + ",-1,";
+        }
+        if(currentInput.coverage != null) {
+            //Also calculate number of probes shared between the two inputs
+            int sharedProbes = 0;
+            IntHashSet currentProbes = new IntHashSet();
+            currentProbes.addAll(currentInput.coverage.getCovered());
+            IntHashSet parentProbes = new IntHashSet();
+            parentProbes.addAll(savedInputs.get(currentParentInputIdx).coverage.getCovered());
+            IntIterator currentProbesIterator = currentProbes.intIterator();
+            while (currentProbesIterator.hasNext()) {
+                int probe = currentProbesIterator.next();
+                if (parentProbes.contains(probe)) {
+                    sharedProbes++;
+                }
+            }
+            // Calculate the total number of probes covered by the two inputs
+            int totalProbes = currentProbes.size() + parentProbes.size() - sharedProbes;
+            text += "," + sharedProbes + "," + currentProbes.size() + "," + parentProbes.size() + "," + totalProbes;
+        }
+        else {
+            text += ",,,";
+        }
+        appendLineToFile(mutationLog, text);
+    }
+
     @Override
     public void handleResult(Result result, Throwable error) throws GuidanceException {
         conditionallySynchronize(multiThreaded, () -> {
@@ -720,10 +852,14 @@ public class ZestGuidance implements Guidance {
             this.numTrials++;
 
             boolean valid = result == Result.SUCCESS;
+            boolean toSave = false;
 
             if (valid) {
                 // Increment valid counter
                 numValid++;
+            }
+            if(currentInput instanceof LinearInput){
+                ((LinearInput) currentInput).validate();
             }
 
             if (result == Result.SUCCESS || (result == Result.INVALID && !SAVE_ONLY_VALID)) {
@@ -736,7 +872,7 @@ public class ZestGuidance implements Guidance {
 
                 // Determine if this input should be saved
                 List<String> savingCriteriaSatisfied = checkSavingCriteriaSatisfied(result);
-                boolean toSave = savingCriteriaSatisfied.size() > 0;
+                toSave = savingCriteriaSatisfied.size() > 0;
 
                 if (toSave) {
                     String why = String.join(" ", savingCriteriaSatisfied);
@@ -750,6 +886,18 @@ public class ZestGuidance implements Guidance {
                     // libFuzzerCompat stats are only displayed when they hit new coverage
                     if (LIBFUZZER_COMPAT_OUTPUT) {
                         displayStats(false);
+                    }
+
+                    if(currentInput instanceof LinearInput){
+                        LinearInput linearInput = (LinearInput) currentInput;
+                        if(linearInput.misAlignments > 0){
+                            numSavedInputsWithMisalignments++;
+                            numMisalignments += linearInput.misAlignments;
+                        }
+                        if(linearInput.numAlignments > 0){
+                            numSavedAlignedInputs++;
+                            numAlignmentsInSavedInputs += linearInput.numAlignments;
+                        }
                     }
 
                     infoLog("Saving new input (at run %d): " +
@@ -811,6 +959,10 @@ public class ZestGuidance implements Guidance {
             // displaying stats on every interval is only enabled for AFL-like stats screen
             if (!LIBFUZZER_COMPAT_OUTPUT) {
                 displayStats(false);
+            }
+
+            if (OBSERVE_MUTATION_DISTANCE && !savedInputs.isEmpty()) {
+                logMutation(toSave);
             }
 
             // Save input unconditionally if such a setting is enabled
@@ -960,6 +1112,8 @@ public class ZestGuidance implements Guidance {
         currentInput.coverage = runCoverage.copy();
         currentInput.nonZeroCoverage = runCoverage.getNonZeroCount();
         currentInput.offspring = 0;
+        currentInput.raw = currentRaw;
+
         savedInputs.get(currentParentInputIdx).offspring += 1;
 
         // Fourth, assume responsibility for branches
@@ -1093,6 +1247,11 @@ public class ZestGuidance implements Guidance {
         String desc;
 
         /**
+         * Raw string representation if available.
+         */
+        String raw;
+
+        /**
          * The run coverage for this input, if the input is saved.
          *
          * <p>This field is null for inputs that are not saved.</p>
@@ -1190,67 +1349,91 @@ public class ZestGuidance implements Guidance {
 
     public static class LinearInput extends Input<Integer> {
 
-        /** A list of byte values (0-255) ordered by their index. */
-        protected ArrayList<TypedGeneratedValue> values;
+        protected ByteBuffer values;
+        protected int numValues;
 
         /** The number of bytes requested so far */
         protected int requested = 0;
 
+        /** For stats **/
+        public int numAlignments;
+        public int misAlignments;
+        public int misAlignmentsThisRun;
+
+        /** For GC **/
+        public IntArrayList skippedIndices;
+
         public LinearInput() {
             super();
-            this.values = new ArrayList<>();
+            this.values = ByteBuffer.allocate(MAX_INPUT_SIZE);
         }
 
         public LinearInput(LinearInput other) {
             super(other);
-            this.values = new ArrayList<>(other.values);
+            this.values = ByteBuffer.allocate(other.values.capacity());
+            this.numValues = other.numValues;
+            other.values.rewind();
+            this.values.put(other.values);
+            other.values.rewind();
+            this.values.rewind();
+        }
+
+        public void validate(){
+            for(int i = 0; i < this.numValues; i++){
+                TypedGeneratedValue.Type type = typeAt(i);
+                switch(type){
+                    case Integer:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Double:
+                        values.getDouble(i * 9 + 1);
+                        break;
+                    case String:
+                        values.getInt(i * 9 + 1);
+                        break;
+                    case Boolean:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Byte:
+                        values.get(i * 9 + 1);
+                        break;
+                    case Char:
+                        values.getChar(i * 9 + 1);
+                        break;
+                    case Float:
+                        values.getFloat(i * 9 + 1);
+                        break;
+                    case Long:
+                        values.getLong(i * 9 + 1);
+                        break;
+                    case Short:
+                        values.getShort(i * 9 + 1);
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+            }
         }
 
         public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
-            // Otherwise, make sure we are requesting just beyond the end-of-list
-            // assert (key == values.size());
-            if (key != requested) {
-                throw new IllegalStateException(String.format("Bytes from linear input out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            // Don't generate over the limit
-            if (requested >= MAX_INPUT_SIZE) {
-                throw new IllegalStateException(new EOFException("Input size limit exceeded"));
-            }
-
-            // If it exists in the list, return it
-            if (key < values.size()) {
-                requested++;
-                // infoLog("Returning old byte at key=%d, total requested=%d", key, requested);
-                TypedGeneratedValue ret = values.get(key);
-                // Check if the type is correct
-                if (ret.type == desired) {
-                    return ret;
-                } else{
-                    // If not, generate a new one and update the value in the list
-                    TypedGeneratedValue newVal = TypedGeneratedValue.generate(desired, random);
-                    values.set(key, newVal);
-                    return newVal;
-                }
-            }
-
-            // Handle end of stream
-            if (GENERATE_EOF_WHEN_OUT) {
-                throw new IllegalStateException(new EOFException("End of input stream"));
-            } else {
-                // Just generate a random input
-                TypedGeneratedValue val = TypedGeneratedValue.generate(desired, random);
-                values.add(val);
-                requested++;
-                // infoLog("Generating fresh byte at key=%d, total requested=%d", key, requested);
-                return val;
-            }
+            throw new UnsupportedOperationException("This really seems like it should be the responsibility of the input stream, not the input...");
         }
 
+        public int position(){
+            return values.position();
+        }
+        public void mark(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
+            }
+            values.mark();
+        }
+        public void reset(){
+            values.reset();
+        }
         @Override
         public int size() {
-            return values.size();
+            return this.numValues * 9;
         }
 
         /**
@@ -1263,11 +1446,12 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            values = new ArrayList<>(values.subList(0, requested));
-            values.trimToSize();
+            if(values.position() < numValues * 9){
+                numValues = values.position() / 9;
+            }
 
             // Inputs should not be empty, otherwise mutations don't work
-            if (values.isEmpty()) {
+            if (numValues == 0) {
                 throw new IllegalArgumentException("Input is either empty or nothing was requested from the input generator.");
             }
         }
@@ -1278,71 +1462,266 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, Math.max(this.values.size() * 0.1, MEAN_MUTATION_COUNT));
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues/10));
             newInput.desc += ",havoc:"+numMutations;
 
             boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
 
+//            System.out.println("Mutation count: " + numMutations);
+//            System.out.println("Set to zero: " + setToZero);
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
                 // Select a random offset and size
-                int offset = random.nextInt(newInput.values.size());
+                int offset = random.nextInt(newInput.numValues);
                 // desc += String.format(":%d@%d", mutationSize, idx);
-                TypedGeneratedValue.Type desired = newInput.values.get(offset).type;
-                newInput.values.set(offset, TypedGeneratedValue.generate(desired, random));
+                TypedGeneratedValue.Type type = newInput.typeAt(offset);
+                newInput.desc += ",@"+offset+"("+type.name()+(setToZero ? "-TO-ZERO":"");
+//                System.out.println(type);
+                switch(type){
+                    case Integer:
+                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
+                        newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
+                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
+                        break;
+                    case Double:
+                        newInput.desc += "-WAS:"+newInput.values.getDouble(offset * 9 + 1);
+                        newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
+                        newInput.desc += "-NOW:"+newInput.values.getDouble(offset * 9 + 1);
+                        break;
+                    case String:
+                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
+                        newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
+                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
+                        break;
+                    case Boolean:
+                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
+                        if(newInput.values.get(offset * 9 + 1) == 0){
+                            newInput.values.put(offset * 9 + 1, (byte) 1);
+                        } else {
+                            newInput.values.put(offset * 9 + 1, (byte) 0);
+                        }
+                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
+                        break;
+                    case Byte:
+                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
+                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
+                        break;
+                    case Char:
+                        newInput.desc += "-WAS:"+newInput.values.getChar(offset * 9 + 1);
+                        newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.getChar(offset * 9 + 1);
+                        break;
+                    case Float:
+                        newInput.desc += "-WAS:"+newInput.values.getFloat(offset * 9 + 1);
+                        newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
+                        newInput.desc += "-NOW:"+newInput.values.getFloat(offset * 9 + 1);
+                        break;
+                    case Long:
+                        newInput.desc += "-WAS:"+newInput.values.getLong(offset * 9 + 1);
+                        newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
+                        newInput.desc += "-NOW:"+newInput.values.getLong(offset * 9 + 1);
+                        break;
+                    case Short:
+                        newInput.desc += "-WAS:"+newInput.values.getShort(offset * 9 + 1);
+                        newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
+                        newInput.desc += "-NOW:"+newInput.values.getShort(offset * 9 + 1);
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+                newInput.desc += ")";
             }
-
             return newInput;
         }
 
         @Override
         public Iterator<TypedGeneratedValue> iterator() {
-            return values.iterator();
+            throw new UnsupportedOperationException("WIP");
         }
 
         public void writeTo(DataOutputStream out) throws IOException{
-            out.writeInt(values.size());
-            for (TypedGeneratedValue value : values) {
-                value.writeTo(out);
+            this.values.rewind();
+            out.writeInt(this.numValues);
+            for(int i = 0; i < this.numValues * 9; i++){
+                out.writeByte(values.get(i));
+            }
+            this.values.rewind();
+        }
+
+        public TypedGeneratedValue.Type typeAt(int idx) {
+            return TypedGeneratedValue.Type.values()[values.get(idx * 9)];
+        }
+
+        public ByteBuffer getValues() {
+            return values;
+        }
+
+        private void checkPositionDebug(){
+            if(values.position() % 9 != 0){
+                throw new IllegalStateException("Marking misaligned position");
             }
         }
+        public int getInt(){
+            int ret = values.getInt();
+            values.position(values.position() + 4);
+            checkPositionDebug();
+            return ret;
+        }
+        public long getLong(){
+            long ret = values.getLong();
+            checkPositionDebug();
+            return ret;
+        }
+        public boolean getBoolean(){
+            boolean ret = values.get() == 1;
+            values.position(values.position() + 7);
+            checkPositionDebug();
+            return ret;
+        }
+        public void advance(){
+            numValues++;
+        }
+        public void addInt(int value) {
+            values.put((byte) TypedGeneratedValue.Type.Integer.ordinal());
+            values.putInt(value);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+        }
+
+        public void addLong(long value) {
+            values.put((byte) TypedGeneratedValue.Type.Long.ordinal());
+            values.putLong(value);
+            checkPositionDebug();
+
+        }
+
+        public void addFloat(float value) {
+            values.put((byte) TypedGeneratedValue.Type.Float.ordinal());
+            values.putFloat(value);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+
+        }
+
+        //And the rest of the types:
+        public void addDouble(double value) {
+            checkPositionDebug();
+            values.put((byte) TypedGeneratedValue.Type.Double.ordinal());
+            values.putDouble(value);
+            checkPositionDebug();
+
+        }
+
+        public void addByte(byte value) {
+            values.put((byte) TypedGeneratedValue.Type.Byte.ordinal());
+            values.put(value);
+            values.position(values.position() + 7);
+            checkPositionDebug();
+
+        }
+
+        public void addShort(short value) {
+            values.put((byte) TypedGeneratedValue.Type.Short.ordinal());
+            values.putShort(value);
+            values.position(values.position() + 6);
+            checkPositionDebug();
+
+        }
+
+        public void addChar(char value) {
+            values.put((byte) TypedGeneratedValue.Type.Char.ordinal());
+            values.putChar(value);
+            values.position(values.position() + 6);
+            checkPositionDebug();
+
+        }
+
+        public void addBoolean(boolean value) {
+            values.put((byte) TypedGeneratedValue.Type.Boolean.ordinal());
+            values.put(value ? (byte) 1 : (byte) 0);
+            values.position(values.position() + 7);
+            checkPositionDebug();
+
+        }
+
+        public void addString(int idx) {
+            values.put((byte) TypedGeneratedValue.Type.String.ordinal());
+            values.putInt(idx);
+            values.position(values.position() + 4);
+            checkPositionDebug();
+
+        }
+
+        public void skipTo(int to){
+            values.position(to);
+            checkPositionDebug();
+        }
+
+        public void clearAfter(int bytesInInputNotIndex) {
+            numValues = (bytesInInputNotIndex) / 9;
+            numValues++;
+        }
+
+        public TypedGeneratedValue.Type nextType() {
+            checkPositionDebug();
+            int tmp = values.get();
+            if(tmp == 0){
+                throw new GuidanceException("Invalid type at position " + values.position());
+            }
+            return TypedGeneratedValue.Type.values()[tmp];
+        }
+
+        public byte getByte() {
+            byte ret = values.get();
+            values.position(values.position() + 7);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public char getChar() {
+            char ret = values.getChar();
+            values.position(values.position() + 6);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public short getShort() {
+            short ret = values.getShort();
+            values.position(values.position() + 6);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public float getFloat() {
+            float ret = values.getFloat();
+            values.position(values.position() + 4);
+            checkPositionDebug();
+            return ret;
+        }
+
+        public double getDouble() {
+            double ret= values.getDouble();
+            checkPositionDebug();
+            return ret;
+        }
+
     }
 
     public static class SeedInput extends LinearInput {
         final File seedFile;
         final DataInputStream in;
-        int valuesRemaining = 0;
 
         public SeedInput(File seedFile) throws IOException {
             super();
             this.seedFile = seedFile;
             this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
-            this.valuesRemaining = this.in.readInt();
-        }
-
-        @Override
-        public TypedGeneratedValue getOrGenerateFresh(Integer key, TypedGeneratedValue.Type desired, Random random) {
-            TypedGeneratedValue value;
-            try {
-                value = TypedGeneratedValue.readOneValue(in);
-            } catch (IOException e) {
-                throw new GuidanceException("Error reading from seed file: " + seedFile.getName(), e);
+            this.numValues = this.in.readInt();
+            for(int i = 0; i < this.numValues * 9; i++){
+                values.put(this.in.readByte());
             }
-
-            // assert (key == values.size())
-            if (key != values.size() && value != null) {
-                throw new IllegalStateException(String.format("Bytes from seed out of order. " +
-                        "Size = %d, Key = %d", values.size(), key));
-            }
-
-            if (value != null) {
-                requested++;
-                values.add(value);
-            }
-
-            // If value is null, then it is returned (as EOF) but not added to the list
-            return value;
+            values.rewind();
         }
 
         @Override
