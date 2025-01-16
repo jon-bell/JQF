@@ -1477,21 +1477,64 @@ public class ZestGuidance implements Guidance {
                 TypedGeneratedValue.Type type = newInput.typeAt(offset);
                 newInput.desc += ",@"+offset+"("+type.name()+(setToZero ? "-TO-ZERO":"");
 //                System.out.println(type);
+                double randForMutator = random.nextDouble();
                 switch(type){
                     case Integer:
-                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
-                        newInput.values.putInt(offset * 9 + 1, setToZero? 0 : random.nextInt());
-                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
+                        int newInt;
+                        int oldInt= newInput.values.getInt(offset * 9 + 1);
+                        newInput.desc += "-WAS:"+oldInt;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            int minVal = oldInt - nearbyDist;
+                            int maxVal = oldInt + nearbyDist;
+                            newInt = minVal + random.nextInt(maxVal - minVal);
+                        } else if(randForMutator < 0.18){
+                            newInt = -oldInt;
+                        } else if(randForMutator < 0.25){
+                            newInt = 0;
+                        } else {
+                            newInt = random.nextInt();
+                        }
+                        newInput.values.putInt(offset * 9 + 1, newInt);
+                        newInput.desc += "-NOW:"+oldInt;
                         break;
                     case Double:
-                        newInput.desc += "-WAS:"+newInput.values.getDouble(offset * 9 + 1);
-                        newInput.values.putDouble(offset * 9 + 1, setToZero ? 0 : random.nextDouble());
-                        newInput.desc += "-NOW:"+newInput.values.getDouble(offset * 9 + 1);
+                        //Pick one of the three mutators
+                        double newDouble;
+                        double oldDouble = newInput.values.getDouble(offset * 9 + 1);
+                        newInput.desc += "-WAS:"+oldDouble;
+                        if(randForMutator < 0.15){
+                            // Pick a nearby number, +/- 0.1
+                            double nearbyDist = 0.1;
+                            double minVal = Math.max(0, oldDouble - nearbyDist);
+                            double maxVal = Math.min(1, oldDouble + nearbyDist);
+                            newDouble = minVal + random.nextDouble() * (maxVal - minVal);
+                        } else if(randForMutator < 0.25){
+                            newDouble = 0;
+                        } else {
+                            newDouble = random.nextDouble();
+                        }
+                        newInput.values.putDouble(offset * 9 + 1, newDouble);
+                        newInput.desc += "-NOW:"+newDouble;
                         break;
                     case String:
-                        newInput.desc += "-WAS:"+newInput.values.getInt(offset * 9 + 1);
-                        newInput.values.putInt(offset * 9 + 1, setToZero ? 0 : random.nextInt());
-                        newInput.desc += "-NOW:"+newInput.values.getInt(offset * 9 + 1);
+                        int oldString= newInput.values.getInt(offset * 9 + 1);
+                        int newString;
+                        newInput.desc += "-WAS:"+oldString;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            int minVal = oldString - nearbyDist;
+                            int maxVal = oldString + nearbyDist;
+                            newString = minVal + random.nextInt(maxVal - minVal);
+                        } else if(randForMutator < 0.25){
+                            newString = 0;
+                        } else {
+                            newString = random.nextInt();
+                        }
+                        newInput.values.putInt(offset * 9 + 1, newString);
+                        newInput.desc += "-NOW:"+newString;
                         break;
                     case Boolean:
                         newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
@@ -1503,29 +1546,94 @@ public class ZestGuidance implements Guidance {
                         newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
                         break;
                     case Byte:
-                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
-                        newInput.values.put(offset * 9 + 1, (byte) (setToZero ? 0 : random.nextInt()));
-                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
+                        byte oldByte = newInput.values.get(offset * 9 + 1);
+                        byte newByte;
+                        newInput.desc += "-WAS:"+oldByte;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            int minVal = oldByte - nearbyDist;
+                            int maxVal = oldByte + nearbyDist;
+                            newByte = (byte) (minVal + random.nextInt(maxVal - minVal));
+                        } else if(randForMutator < 0.25){
+                            newByte = 0;
+                        } else {
+                            newByte = (byte) random.nextInt();
+                        }
+                        newInput.values.put(offset * 9 + 1, newByte);
+                        newInput.desc += "-NOW:"+newByte;
                         break;
                     case Char:
-                        newInput.desc += "-WAS:"+newInput.values.getChar(offset * 9 + 1);
-                        newInput.values.putChar(offset * 9 + 1, (char) (setToZero ? 0 : random.nextInt()));
-                        newInput.desc += "-NOW:"+newInput.values.getChar(offset * 9 + 1);
+                        char oldChar = newInput.values.getChar(offset * 9 + 1);
+                        char newChar;
+                        newInput.desc += "-WAS:"+oldChar;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            int minVal = oldChar - nearbyDist;
+                            int maxVal = oldChar + nearbyDist;
+                            newChar = (char) (minVal + random.nextInt(maxVal - minVal));
+                        } else if(randForMutator < 0.25){
+                            newChar = 0;
+                        } else {
+                            newChar = (char) random.nextInt();
+                        }
+                        newInput.values.putChar(offset * 9 + 1, newChar);
+                        newInput.desc += "-NOW:"+newChar;
                         break;
                     case Float:
-                        newInput.desc += "-WAS:"+newInput.values.getFloat(offset * 9 + 1);
-                        newInput.values.putFloat(offset * 9 + 1, setToZero ? 0 : random.nextFloat());
-                        newInput.desc += "-NOW:"+newInput.values.getFloat(offset * 9 + 1);
+                        float oldFloat = newInput.values.getFloat(offset * 9 + 1);
+                        float newFloat;
+                        newInput.desc += "-WAS:"+oldFloat;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 0.1
+                            float nearbyDist = 0.1f;
+                            float minVal = Math.max(0, oldFloat - nearbyDist);
+                            float maxVal = Math.min(1, oldFloat + nearbyDist);
+                            newFloat = minVal + random.nextFloat() * (maxVal - minVal);
+                        } else if(randForMutator < 0.25){
+                            newFloat = 0;
+                        } else {
+                            newFloat = random.nextFloat();
+                        }
+                        newInput.values.putFloat(offset * 9 + 1, newFloat);
+                        newInput.desc += "-NOW:"+newFloat;
                         break;
                     case Long:
-                        newInput.desc += "-WAS:"+newInput.values.getLong(offset * 9 + 1);
-                        newInput.values.putLong(offset * 9 + 1, setToZero ? 0 : random.nextLong());
-                        newInput.desc += "-NOW:"+newInput.values.getLong(offset * 9 + 1);
+                        long oldLong = newInput.values.getLong(offset * 9 + 1);
+                        long newLong;
+                        newInput.desc += "-WAS:"+oldLong;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            long minVal = oldLong - nearbyDist;
+                            long maxVal = oldLong + nearbyDist;
+                            newLong = minVal + random.nextInt((int) (maxVal - minVal));
+                        } else if(randForMutator < 0.25){
+                            newLong = 0;
+                        } else {
+                            newLong = random.nextLong();
+                        }
+                        newInput.values.putLong(offset * 9 + 1, newLong);
+                        newInput.desc += "-NOW:"+newLong;
                         break;
                     case Short:
-                        newInput.desc += "-WAS:"+newInput.values.getShort(offset * 9 + 1);
-                        newInput.values.putShort(offset * 9 + 1, (short) (setToZero ? 0 : random.nextInt()));
-                        newInput.desc += "-NOW:"+newInput.values.getShort(offset * 9 + 1);
+                        short oldShort = newInput.values.getShort(offset * 9 + 1);
+                        short newShort;
+                        newInput.desc += "-WAS:"+oldShort;
+                        if(randForMutator < 0.15){
+                            //Pick a nearby number, +/- 10
+                            int nearbyDist = 10;
+                            int minVal = oldShort - nearbyDist;
+                            int maxVal = oldShort + nearbyDist;
+                            newShort = (short) (minVal + random.nextInt(maxVal - minVal));
+                        } else if(randForMutator < 0.25){
+                            newShort = 0;
+                        } else {
+                            newShort = (short) random.nextInt();
+                        }
+                        newInput.values.putShort(offset * 9 + 1, newShort);
+                        newInput.desc += "-NOW:"+newShort;
                         break;
                     default:
                         throw new UnsupportedOperationException();
