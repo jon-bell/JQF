@@ -31,6 +31,7 @@ package edu.berkeley.cs.jqf.fuzz.ei;
 
 import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedGeneratedValue;
 import edu.berkeley.cs.jqf.fuzz.ei.ir.TypedInputStream;
+
 import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -76,67 +77,106 @@ import static java.lang.Math.log;
  */
 public class ZestGuidance implements Guidance {
 
-    /** A pseudo-random number generator for generating fresh values. */
+    /**
+     * A pseudo-random number generator for generating fresh values.
+     */
     protected Random random;
 
-    /** The name of the test for display purposes. */
+    /**
+     * The name of the test for display purposes.
+     */
     protected final String testName;
 
     // ------------ ALGORITHM BOOKKEEPING ------------
 
-    /** The max amount of time to run for, in milli-seconds */
+    /**
+     * The max amount of time to run for, in milli-seconds
+     */
     protected final long maxDurationMillis;
 
-    /** The max number of trials to run */
+    /**
+     * The max number of trials to run
+     */
     protected final long maxTrials;
 
-    /** The number of trials completed. */
+    /**
+     * The number of trials completed.
+     */
     protected long numTrials = 0;
 
-    /** The number of valid inputs. */
+    /**
+     * The number of valid inputs.
+     */
     protected long numValid = 0;
 
-    /** The directory where fuzzing results are produced. */
+    /**
+     * The directory where fuzzing results are produced.
+     */
     protected final File outputDirectory;
 
-    /** The directory where interesting inputs are saved. */
+    /**
+     * The directory where interesting inputs are saved.
+     */
     protected File savedCorpusDirectory;
 
-    /** The directory where saved inputs are saved. */
+    /**
+     * The directory where saved inputs are saved.
+     */
     protected File savedFailuresDirectory;
 
-    /** The directory where all generated inputs are logged in sub-directories (if enabled). */
+    /**
+     * The directory where all generated inputs are logged in sub-directories (if enabled).
+     */
     protected File allInputsDirectory;
 
-    /** Set of saved inputs to fuzz. */
+    /**
+     * Set of saved inputs to fuzz.
+     */
     protected ArrayList<Input> savedInputs = new ArrayList<>();
 
-    /** Queue of seeds to fuzz. */
+    /**
+     * Queue of seeds to fuzz.
+     */
     protected Deque<Input> seedInputs = new ArrayDeque<>();
 
-    /** Current input that's running -- valid after getInput() and before handleResult(). */
+    /**
+     * Current input that's running -- valid after getInput() and before handleResult().
+     */
     protected Input<?> currentInput;
 
-    /** Index of currentInput in the savedInputs -- valid after seeds are processed (OK if this is inaccurate). */
+    /**
+     * Index of currentInput in the savedInputs -- valid after seeds are processed (OK if this is inaccurate).
+     */
     protected int currentParentInputIdx = 0;
 
-    /** Number of mutated inputs generated from currentInput. */
+    /**
+     * Number of mutated inputs generated from currentInput.
+     */
     protected int numChildrenGeneratedForCurrentParentInput = 0;
 
-    /** Number of cycles completed (i.e. how many times we've reset currentParentInputIdx to 0. */
+    /**
+     * Number of cycles completed (i.e. how many times we've reset currentParentInputIdx to 0.
+     */
     protected int cyclesCompleted = 0;
 
-    /** Number of favored inputs in the last cycle. */
+    /**
+     * Number of favored inputs in the last cycle.
+     */
     protected int numFavoredLastCycle = 0;
 
-    /** Blind fuzzing -- if true then the queue is always empty. */
+    /**
+     * Blind fuzzing -- if true then the queue is always empty.
+     */
     protected boolean blind;
 
-    /** Validity fuzzing -- if true then save valid inputs that increase valid coverage */
+    /**
+     * Validity fuzzing -- if true then save valid inputs that increase valid coverage
+     */
     protected boolean validityFuzzing;
 
-    /** Number of saved inputs.
-     *
+    /**
+     * Number of saved inputs.
+     * <p>
      * This is usually the same as savedInputs.size(),
      * but we do not really save inputs in TOTALLY_RANDOM mode.
      */
@@ -147,69 +187,111 @@ public class ZestGuidance implements Guidance {
     protected int numSavedAlignedInputs = 0;
     protected int numAlignmentsInSavedInputs = 0;
 
-    /** Coverage statistics for a single run. */
+    /**
+     * Coverage statistics for a single run.
+     */
     protected ICoverage runCoverage = CoverageFactory.newInstance();
 
-    /** Cumulative coverage statistics. */
+    /**
+     * Cumulative coverage statistics.
+     */
     protected ICoverage totalCoverage = CoverageFactory.newInstance();
 
-    /** Cumulative coverage for valid inputs. */
+    /**
+     * Cumulative coverage for valid inputs.
+     */
     protected ICoverage validCoverage = CoverageFactory.newInstance();
 
-    /** The maximum number of keys covered by any single input found so far. */
+    /**
+     * The maximum number of keys covered by any single input found so far.
+     */
     protected int maxCoverage = 0;
 
-    /** A mapping of coverage keys to inputs that are responsible for them. */
+    /**
+     * A mapping of coverage keys to inputs that are responsible for them.
+     */
     protected Map<Object, Input> responsibleInputs = new HashMap<>(totalCoverage.size());
 
-    /** The set of unique failures found so far. */
+    /**
+     * The set of unique failures found so far.
+     */
     protected Set<String> uniqueFailures = new HashSet<>();
 
-    /** save crash to specific location (should be used with EXIT_ON_CRASH) **/
+    /**
+     * save crash to specific location (should be used with EXIT_ON_CRASH)
+     **/
     protected final String EXACT_CRASH_PATH = System.getProperty("jqf.ei.EXACT_CRASH_PATH");
 
     // ---------- LOGGING / STATS OUTPUT ------------
 
-    /** Whether to print log statements to stderr (debug option; manually edit). */
+    /**
+     * Whether to print log statements to stderr (debug option; manually edit).
+     */
     protected final boolean verbose = true;
 
-    /** A system console, which is non-null only if STDOUT is a console. */
+    /**
+     * A system console, which is non-null only if STDOUT is a console.
+     */
     protected final Console console = System.console();
 
-    /** Time since this guidance instance was created. */
+    /**
+     * Time since this guidance instance was created.
+     */
     protected final Date startTime = new Date();
 
-    /** Time at last stats refresh. */
+    /**
+     * Time at last stats refresh.
+     */
     protected Date lastRefreshTime = startTime;
 
-    /** Total execs at last stats refresh. */
+    /**
+     * Total execs at last stats refresh.
+     */
     protected long lastNumTrials = 0;
 
-    /** Minimum amount of time (in millis) between two stats refreshes. */
+    /**
+     * Minimum amount of time (in millis) between two stats refreshes.
+     */
     protected final long STATS_REFRESH_TIME_PERIOD = 300;
 
-    /** The file where log data is written. */
+    /**
+     * The file where log data is written.
+     */
     protected PrintWriter logFile;
 
-    /** The file where log data is written. */
+    /**
+     * The file where log data is written.
+     */
     protected PrintWriter mutationLog;
 
-    /** The file where saved plot data is written. */
+    /**
+     * The file where saved plot data is written.
+     */
     protected PrintWriter statsFile;
 
-    /** The currently executing input (for debugging purposes). */
+    /**
+     * The currently executing input (for debugging purposes).
+     */
     protected File currentInputFile;
 
-    /** The file contianing the coverage information */
+    /**
+     * The file contianing the coverage information
+     */
     protected File coverageFile;
 
-    /** Use libFuzzer like output instead of AFL like stats screen (https://llvm.org/docs/LibFuzzer.html#output) **/
+    /**
+     * Use libFuzzer like output instead of AFL like stats screen (https://llvm.org/docs/LibFuzzer.html#output)
+     **/
     protected final boolean LIBFUZZER_COMPAT_OUTPUT = Boolean.getBoolean("jqf.ei.LIBFUZZER_COMPAT_OUTPUT");
 
-    /** Whether to hide fuzzing statistics **/
+    /**
+     * Whether to hide fuzzing statistics
+     **/
     protected final boolean QUIET_MODE = Boolean.getBoolean("jqf.ei.QUIET_MODE");
 
-    /** Whether to store all generated inputs to disk (can get slowww!) */
+    /**
+     * Whether to store all generated inputs to disk (can get slowww!)
+     */
     protected final boolean LOG_ALL_INPUTS = Boolean.getBoolean("jqf.ei.LOG_ALL_INPUTS");
 
     protected final boolean OBSERVE_MUTATION_DISTANCE = Boolean.getBoolean("jqf.ei.OBSERVE_MUTATION_DISTANCE");
@@ -218,53 +300,83 @@ public class ZestGuidance implements Guidance {
 
     // ------------- TIMEOUT HANDLING ------------
 
-    /** Timeout for an individual run. */
+    /**
+     * Timeout for an individual run.
+     */
     protected long singleRunTimeoutMillis;
 
-    /** Date when last run was started. */
+    /**
+     * Date when last run was started.
+     */
     protected Date runStart;
 
-    /** Number of conditional jumps since last run was started. */
+    /**
+     * Number of conditional jumps since last run was started.
+     */
     protected long branchCount;
 
-    /** Whether to stop/exit once a crash is found. **/
+    /**
+     * Whether to stop/exit once a crash is found.
+     **/
     protected final boolean EXIT_ON_CRASH = Boolean.getBoolean("jqf.ei.EXIT_ON_CRASH");
 
     // ------------- THREAD HANDLING ------------
 
-    /** The first thread in the application, which usually runs the test method. */
+    /**
+     * The first thread in the application, which usually runs the test method.
+     */
     protected Thread firstThread;
 
-    /** Whether the application has more than one thread running coverage-instrumented code */
+    /**
+     * Whether the application has more than one thread running coverage-instrumented code
+     */
     protected boolean multiThreaded = false;
 
     // ------------- FUZZING HEURISTICS ------------
 
-    /** Whether to save only valid inputs **/
+    /**
+     * Whether to save only valid inputs
+     **/
     protected final boolean SAVE_ONLY_VALID = Boolean.getBoolean("jqf.ei.SAVE_ONLY_VALID");
 
-    /** Max input size to generate. */
+    /**
+     * Max input size to generate.
+     */
     public static final int MAX_INPUT_SIZE = Integer.getInteger("jqf.ei.MAX_INPUT_SIZE", 10240);
 
-    /** Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes. **/
+    /**
+     * Whether to generate EOFs when we run out of bytes in the input, instead of randomly generating new bytes.
+     **/
     public static final boolean GENERATE_EOF_WHEN_OUT = Boolean.getBoolean("jqf.ei.GENERATE_EOF_WHEN_OUT");
 
-    /** Baseline number of mutated children to produce from a given parent input. */
+    /**
+     * Baseline number of mutated children to produce from a given parent input.
+     */
     protected final int NUM_CHILDREN_BASELINE = 50;
 
-    /** Multiplication factor for number of children to produce for favored inputs. */
+    /**
+     * Multiplication factor for number of children to produce for favored inputs.
+     */
     protected final int NUM_CHILDREN_MULTIPLIER_FAVORED = 20;
 
-    /** Mean number of mutations to perform in each round. */
+    /**
+     * Mean number of mutations to perform in each round.
+     */
     protected static final double MEAN_MUTATION_COUNT = 8.0;
 
-    /** Mean number of contiguous bytes to mutate in each mutation. */
+    /**
+     * Mean number of contiguous bytes to mutate in each mutation.
+     */
     protected static final double MEAN_MUTATION_SIZE = 4.0; // Bytes
 
-    /** Whether to save inputs that only add new coverage bits (but no new responsibilities). */
+    /**
+     * Whether to save inputs that only add new coverage bits (but no new responsibilities).
+     */
     protected final boolean DISABLE_SAVE_NEW_COUNTS = Boolean.getBoolean("jqf.ei.DISABLE_SAVE_NEW_COUNTS");
 
-    /** Whether to steal responsibility from old inputs (this increases computation cost). */
+    /**
+     * Whether to steal responsibility from old inputs (this increases computation cost).
+     */
     protected final boolean STEAL_RESPONSIBILITY = Boolean.getBoolean("jqf.ei.STEAL_RESPONSIBILITY");
 
     protected String currentRaw = null;
@@ -293,13 +405,13 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with optional duration,
      * optional trial limit, and possibly deterministic PRNG.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
-     * @param trials   the number of trials for which to run fuzzing, where
-     *                 {@code null} indicates unlimited trials.
-     * @param outputDirectory the directory where fuzzing results will be written
-     * @param sourceOfRandomness      a pseudo-random number generator
+     * @param testName           the name of test to display on the status screen
+     * @param duration           the amount of time to run fuzzing for, where
+     *                           {@code null} indicates unlimited time.
+     * @param trials             the number of trials for which to run fuzzing, where
+     *                           {@code null} indicates unlimited trials.
+     * @param outputDirectory    the directory where fuzzing results will be written
+     * @param sourceOfRandomness a pseudo-random number generator
      * @throws IOException if the output directory could not be prepared
      */
     public ZestGuidance(String testName, Duration duration, Long trials, File outputDirectory, Random sourceOfRandomness) throws IOException {
@@ -312,7 +424,7 @@ public class ZestGuidance implements Guidance {
         this.validityFuzzing = !Boolean.getBoolean("jqf.ei.DISABLE_VALIDITY_FUZZING");
         prepareOutputDirectory();
 
-        if(this.runCoverage instanceof FastCoverageListener){
+        if (this.runCoverage instanceof FastCoverageListener) {
             FastCoverageSnoop.setFastCoverageListener((FastCoverageListener) this.runCoverage);
         }
 
@@ -332,14 +444,14 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with seed input files and optional
      * duration, optional trial limit, an possibly deterministic PRNG.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
-     * @param trials   the number of trials for which to run fuzzing, where
-     *                 {@code null} indicates unlimited trials.
-     * @param outputDirectory the directory where fuzzing results will be written
-     * @param seedInputFiles one or more input files to be used as initial inputs
-     * @param sourceOfRandomness      a pseudo-random number generator
+     * @param testName           the name of test to display on the status screen
+     * @param duration           the amount of time to run fuzzing for, where
+     *                           {@code null} indicates unlimited time.
+     * @param trials             the number of trials for which to run fuzzing, where
+     *                           {@code null} indicates unlimited trials.
+     * @param outputDirectory    the directory where fuzzing results will be written
+     * @param seedInputFiles     one or more input files to be used as initial inputs
+     * @param sourceOfRandomness a pseudo-random number generator
      * @throws IOException if the output directory could not be prepared
      */
     public ZestGuidance(String testName, Duration duration, Long trials, File outputDirectory, File[] seedInputFiles, Random sourceOfRandomness) throws IOException {
@@ -355,14 +467,14 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with seed input directory and optional
      * duration, optional trial limit, an possibly deterministic PRNG.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
-     * @param trials   the number of trials for which to run fuzzing, where
-     *                 {@code null} indicates unlimited trials.
-     * @param outputDirectory the directory where fuzzing results will be written
-     * @param seedInputDir the directory containing one or more input files to be used as initial inputs
-     * @param sourceOfRandomness      a pseudo-random number generator
+     * @param testName           the name of test to display on the status screen
+     * @param duration           the amount of time to run fuzzing for, where
+     *                           {@code null} indicates unlimited time.
+     * @param trials             the number of trials for which to run fuzzing, where
+     *                           {@code null} indicates unlimited trials.
+     * @param outputDirectory    the directory where fuzzing results will be written
+     * @param seedInputDir       the directory containing one or more input files to be used as initial inputs
+     * @param sourceOfRandomness a pseudo-random number generator
      * @throws IOException if the output directory could not be prepared
      */
     public ZestGuidance(String testName, Duration duration, Long trials, File outputDirectory, File seedInputDir, Random sourceOfRandomness) throws IOException {
@@ -373,11 +485,11 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with seed inputs and
      * optional duration.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
+     * @param testName        the name of test to display on the status screen
+     * @param duration        the amount of time to run fuzzing for, where
+     *                        {@code null} indicates unlimited time.
      * @param outputDirectory the directory where fuzzing results will be written
-     * @param seedInputDir the directory containing one or more input files to be used as initial inputs
+     * @param seedInputDir    the directory containing one or more input files to be used as initial inputs
      * @throws IOException if the output directory could not be prepared
      */
     public ZestGuidance(String testName, Duration duration, File outputDirectory, File seedInputDir) throws IOException {
@@ -388,9 +500,9 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with seed inputs and
      * optional duration.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
+     * @param testName        the name of test to display on the status screen
+     * @param duration        the amount of time to run fuzzing for, where
+     *                        {@code null} indicates unlimited time.
      * @param outputDirectory the directory where fuzzing results will be written
      * @throws IOException if the output directory could not be prepared
      */
@@ -402,9 +514,9 @@ public class ZestGuidance implements Guidance {
      * Creates a new Zest guidance instance with seed inputs and
      * optional duration.
      *
-     * @param testName the name of test to display on the status screen
-     * @param duration the amount of time to run fuzzing for, where
-     *                 {@code null} indicates unlimited time.
+     * @param testName        the name of test to display on the status screen
+     * @param duration        the amount of time to run fuzzing for, where
+     *                        {@code null} indicates unlimited time.
      * @param outputDirectory the directory where fuzzing results will be written
      * @throws IOException if the output directory could not be prepared
      */
@@ -466,7 +578,7 @@ public class ZestGuidance implements Guidance {
 
     protected String getStatNames() {
         return "# unix_time, cycles_done, cur_path, paths_total, pending_total, " +
-            "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes,numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs";
+                "pending_favs, map_size, unique_crashes, unique_hangs, max_depth, execs_per_sec, valid_inputs, invalid_inputs, valid_cov, all_covered_probes, valid_covered_probes,numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs";
     }
 
     /* Writes a line of text to a given log file. */
@@ -513,7 +625,7 @@ public class ZestGuidance implements Guidance {
         long interlvalTrials = numTrials - lastNumTrials;
         long intervalExecsPerSec = interlvalTrials * 1000L;
         double intervalExecsPerSecDouble = interlvalTrials * 1000.0;
-        if(intervalMilliseconds != 0) {
+        if (intervalMilliseconds != 0) {
             intervalExecsPerSec = interlvalTrials * 1000L / intervalMilliseconds;
             intervalExecsPerSecDouble = interlvalTrials * 1000.0 / intervalMilliseconds;
         }
@@ -559,13 +671,13 @@ public class ZestGuidance implements Guidance {
                 console.printf("Elapsed time:         %s (%s)\n", millisToDuration(elapsedMilliseconds),
                         maxDurationMillis == Long.MAX_VALUE ? "no time limit" : ("max " + millisToDuration(maxDurationMillis)));
                 console.printf("Number of executions: %,d (%s)\n", numTrials,
-                               maxTrials == Long.MAX_VALUE ? "no trial limit" : ("max " + maxTrials));
+                        maxTrials == Long.MAX_VALUE ? "no trial limit" : ("max " + maxTrials));
                 console.printf("Valid inputs:         %,d (%.2f%%)\n", numValid, numValid * 100.0 / numTrials);
                 console.printf("Cycles completed:     %d\n", cyclesCompleted);
                 console.printf("Unique failures:      %,d\n", uniqueFailures.size());
                 console.printf("Queue size:           %,d (%,d favored last cycle)\n", savedInputs.size(), numFavoredLastCycle);
-                console.printf("Misaligned inputs:    %d (avg %d/input)\n", numSavedInputsWithMisalignments, numSavedInputsWithMisalignments > 0 ? numMisalignments / numSavedInputsWithMisalignments: 0);
-                console.printf("Realigned inputs:     %d (avg %d/input)\n", numSavedAlignedInputs, numSavedAlignedInputs > 0 ? numAlignmentsInSavedInputs / numSavedAlignedInputs: 0);
+                console.printf("Misaligned inputs:    %d (avg %d/input)\n", numSavedInputsWithMisalignments, numSavedInputsWithMisalignments > 0 ? numMisalignments / numSavedInputsWithMisalignments : 0);
+                console.printf("Realigned inputs:     %d (avg %d/input)\n", numSavedAlignedInputs, numSavedAlignedInputs > 0 ? numAlignmentsInSavedInputs / numSavedAlignedInputs : 0);
                 console.printf("Current parent input: %s\n", currentParentInputDesc);
                 console.printf("Execution speed:      %,d/sec now | %,d/sec overall\n", intervalExecsPerSec, execsPerSec);
                 console.printf("Total coverage:       %,d branches (%.2f%% of map)\n", nonZeroCount, nonZeroFraction);
@@ -576,11 +688,13 @@ public class ZestGuidance implements Guidance {
         String plotData = String.format("%d, %d, %d, %d, %d, %d, %.2f%%, %d, %d, %d, %.2f, %d, %d, %.2f%%, %d, %d, %d, %d, %d, %d",
                 TimeUnit.MILLISECONDS.toSeconds(now.getTime()), cyclesCompleted, currentParentInputIdx,
                 numSavedInputs, 0, 0, nonZeroFraction, uniqueFailures.size(), 0, 0, intervalExecsPerSecDouble,
-                numValid, numTrials-numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount, numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs);
+                numValid, numTrials - numValid, nonZeroValidFraction, nonZeroCount, nonZeroValidCount, numSavedInputsWithMisalignments, numMisalignments, numSavedAlignedInputs, numAlignmentsInSavedInputs);
         appendLineToFile(statsFile, plotData);
     }
 
-    /** Updates the data in the coverage file */
+    /**
+     * Updates the data in the coverage file
+     */
     protected void updateCoverageFile() {
         try {
             PrintWriter pw = new PrintWriter(coverageFile);
@@ -595,10 +709,10 @@ public class ZestGuidance implements Guidance {
     /* Returns the banner to be displayed on the status screen */
     protected String getTitle() {
         if (blind) {
-            return  "Generator-based random fuzzing (no guidance)\n" +
+            return "Generator-based random fuzzing (no guidance)\n" +
                     "--------------------------------------------\n";
         } else {
-            return  "Semantic Fuzzing with Zest\n" +
+            return "Semantic Fuzzing with Zest\n" +
                     "--------------------------\n";
         }
     }
@@ -624,7 +738,9 @@ public class ZestGuidance implements Guidance {
         return target;
     }
 
-    /** Handles the end of fuzzing cycle (i.e., having gone through the entire queue) */
+    /**
+     * Handles the end of fuzzing cycle (i.e., having gone through the entire queue)
+     */
     protected void completeCycle() {
         // Increment cycle count
         cyclesCompleted++;
@@ -667,7 +783,7 @@ public class ZestGuidance implements Guidance {
 
     /**
      * Returns an InputStream that delivers parameters to the generators.
-     *
+     * <p>
      * Note: The variable `currentInput` has been set to point to the input
      * to mutate.
      *
@@ -746,8 +862,8 @@ public class ZestGuidance implements Guidance {
             // exit
             return false;
         }
-        if(elapsedMilliseconds < maxDurationMillis
-            && numTrials < maxTrials) {
+        if (elapsedMilliseconds < maxDurationMillis
+                && numTrials < maxTrials) {
             return true;
         } else {
             displayStats(true);
@@ -788,11 +904,11 @@ public class ZestGuidance implements Guidance {
     }
 
     private void logMutation(boolean saved) {
-        String parentRaw =savedInputs.get(currentParentInputIdx).raw;
+        String parentRaw = savedInputs.get(currentParentInputIdx).raw;
         String text = "";
         if (currentRaw != null && parentRaw != null) {
             int distance = getLevenshteinDistFromString(currentRaw, parentRaw);
-            text =  currentRaw.length() + "," +  parentRaw.length() + "," +
+            text = currentRaw.length() + "," + parentRaw.length() + "," +
                     distance + "," + saved + "," + currentParentInputIdx + ",";
             if (saved) {
                 text += Integer.toString(currentInput.id);
@@ -800,8 +916,8 @@ public class ZestGuidance implements Guidance {
                 text += "-1";
             }
             text += ",";
-            if(distance == 0){
-                appendLineToFile(logFile, "Identical Mutant, input length="+currentInput.size() +", desc="+currentInput.desc);
+            if (distance == 0) {
+                appendLineToFile(logFile, "Identical Mutant, input length=" + currentInput.size() + ", desc=" + currentInput.desc);
             }
             if (distance == 0 && SAVE_IDENTICAL_MUTATION) {
                 String saveFileName = String.format("id_%06d", identicalMutationIndex);
@@ -818,7 +934,7 @@ public class ZestGuidance implements Guidance {
         } else {
             text = "-1,-1,-1," + saved + "," + currentParentInputIdx + ",-1,";
         }
-        if(currentInput.coverage != null) {
+        if (currentInput.coverage != null) {
             //Also calculate number of probes shared between the two inputs
             int sharedProbes = 0;
             IntHashSet currentProbes = new IntHashSet();
@@ -835,8 +951,7 @@ public class ZestGuidance implements Guidance {
             // Calculate the total number of probes covered by the two inputs
             int totalProbes = currentProbes.size() + parentProbes.size() - sharedProbes;
             text += "," + sharedProbes + "," + currentProbes.size() + "," + parentProbes.size() + "," + totalProbes;
-        }
-        else {
+        } else {
             text += ",,,";
         }
         appendLineToFile(mutationLog, text);
@@ -858,7 +973,7 @@ public class ZestGuidance implements Guidance {
                 // Increment valid counter
                 numValid++;
             }
-            if(currentInput instanceof LinearInput){
+            if (currentInput instanceof LinearInput) {
                 ((LinearInput) currentInput).validate();
             }
 
@@ -888,13 +1003,13 @@ public class ZestGuidance implements Guidance {
                         displayStats(false);
                     }
 
-                    if(currentInput instanceof LinearInput){
+                    if (currentInput instanceof LinearInput) {
                         LinearInput linearInput = (LinearInput) currentInput;
-                        if(linearInput.misAlignments > 0){
+                        if (linearInput.misAlignments > 0) {
                             numSavedInputsWithMisalignments++;
                             numMisalignments += linearInput.misAlignments;
                         }
-                        if(linearInput.numAlignments > 0){
+                        if (linearInput.numAlignments > 0) {
                             numSavedAlignedInputs++;
                             numAlignmentsInSavedInputs += linearInput.numAlignments;
                         }
@@ -1060,7 +1175,7 @@ public class ZestGuidance implements Guidance {
 
                     // Check if we can steal all responsibilities from candidate
                     IntIterator iter = responsibilities.intIterator();
-                    while(iter.hasNext()){
+                    while (iter.hasNext()) {
                         int b = iter.next();
                         if (covered.contains(b) == false) {
                             // Cannot steal if this input does not cover something
@@ -1081,7 +1196,7 @@ public class ZestGuidance implements Guidance {
 
     protected void writeCurrentInputToFile(File saveFile) throws IOException {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(saveFile)))) {
-            if(currentInput instanceof LinearInput)
+            if (currentInput instanceof LinearInput)
                 ((LinearInput) currentInput).writeTo(out);
         }
 
@@ -1119,10 +1234,10 @@ public class ZestGuidance implements Guidance {
         // Fourth, assume responsibility for branches
         currentInput.responsibilities = responsibilities;
         if (responsibilities.size() > 0) {
-          currentInput.setFavored();
+            currentInput.setFavored();
         }
         IntIterator iter = responsibilities.intIterator();
-        while(iter.hasNext()){
+        while (iter.hasNext()) {
             int b = iter.next();
             // If there is an old input that is responsible,
             // subsume it
@@ -1151,7 +1266,7 @@ public class ZestGuidance implements Guidance {
 
     /**
      * Handles a trace event generated during test execution.
-     *
+     * <p>
      * Not used by FastNonCollidingCoverage, which does not allocate an
      * instance of TraceEvent at each branch probe execution.
      *
@@ -1174,6 +1289,7 @@ public class ZestGuidance implements Guidance {
 
     /**
      * Returns a reference to the coverage statistics.
+     *
      * @return a reference to the coverage statistics
      */
     public ICoverage getTotalCoverage() {
@@ -1182,7 +1298,7 @@ public class ZestGuidance implements Guidance {
 
     /**
      * Conditionally run a method using synchronization.
-     *
+     * <p>
      * This is used to handle multi-threaded fuzzing.
      */
     protected void conditionallySynchronize(boolean cond, Runnable task) {
@@ -1307,8 +1423,11 @@ public class ZestGuidance implements Guidance {
         }
 
         public abstract TypedGeneratedValue getOrGenerateFresh(K key, TypedGeneratedValue.Type desiredType, Random random);
+
         public abstract int size();
+
         public abstract Input fuzz(Random random);
+
         public abstract void gc();
 
         /**
@@ -1333,11 +1452,11 @@ public class ZestGuidance implements Guidance {
 
         /**
          * Sample from a geometric distribution with given mean.
-         *
+         * <p>
          * Utility method used in implementing mutation operations.
          *
          * @param random a pseudo-random number generator
-         * @param mean the mean of the distribution
+         * @param mean   the mean of the distribution
          * @return a randomly sampled value
          */
         public static int sampleGeometric(Random random, double mean) {
@@ -1352,15 +1471,21 @@ public class ZestGuidance implements Guidance {
         protected ByteBuffer values;
         protected int numValues;
 
-        /** The number of bytes requested so far */
+        /**
+         * The number of bytes requested so far
+         */
         protected int requested = 0;
 
-        /** For stats **/
+        /**
+         * For stats
+         **/
         public int numAlignments;
         public int misAlignments;
         public int misAlignmentsThisRun;
 
-        /** For GC **/
+        /**
+         * For GC
+         **/
         public IntArrayList skippedIndices;
 
         public LinearInput() {
@@ -1378,10 +1503,10 @@ public class ZestGuidance implements Guidance {
             this.values.rewind();
         }
 
-        public void validate(){
-            for(int i = 0; i < this.numValues; i++){
+        public void validate() {
+            for (int i = 0; i < this.numValues; i++) {
                 TypedGeneratedValue.Type type = typeAt(i);
-                switch(type){
+                switch (type) {
                     case Integer:
                         values.getInt(i * 9 + 1);
                         break;
@@ -1419,18 +1544,21 @@ public class ZestGuidance implements Guidance {
             throw new UnsupportedOperationException("This really seems like it should be the responsibility of the input stream, not the input...");
         }
 
-        public int position(){
+        public int position() {
             return values.position();
         }
-        public void mark(){
-            if(values.position() % 9 != 0){
+
+        public void mark() {
+            if (values.position() % 9 != 0) {
                 throw new IllegalStateException("Marking misaligned position");
             }
             values.mark();
         }
-        public void reset(){
+
+        public void reset() {
             values.reset();
         }
+
         @Override
         public int size() {
             return this.numValues * 9;
@@ -1446,7 +1574,7 @@ public class ZestGuidance implements Guidance {
         @Override
         public void gc() {
             // Remove elements beyond "requested"
-            if(values.position() < numValues * 9){
+            if (values.position() < numValues * 9) {
                 numValues = values.position() / 9;
             }
 
@@ -1462,178 +1590,44 @@ public class ZestGuidance implements Guidance {
             LinearInput newInput = new LinearInput(this);
 
             // Stack a bunch of mutations
-            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues/10));
-            newInput.desc += ",havoc:"+numMutations;
+            int numMutations = sampleGeometric(random, Math.max(MEAN_MUTATION_COUNT, newInput.numValues / 10));
+            newInput.desc += ",havoc:" + numMutations;
 
             boolean setToZero = random.nextDouble() < 0.1; // one out of 10 times
 
-//            System.out.println("Mutation count: " + numMutations);
-//            System.out.println("Set to zero: " + setToZero);
             for (int mutation = 1; mutation <= numMutations; mutation++) {
 
-                // Select a random offset and size
+                // Select a random offset
                 int offset = random.nextInt(newInput.numValues);
-                // desc += String.format(":%d@%d", mutationSize, idx);
                 TypedGeneratedValue.Type type = newInput.typeAt(offset);
-                newInput.desc += ",@"+offset+"("+type.name()+(setToZero ? "-TO-ZERO":"");
-//                System.out.println(type);
                 double randForMutator = random.nextDouble();
-                switch(type){
+                switch (type) {
                     case Integer:
-                        int newInt;
-                        int oldInt= newInput.values.getInt(offset * 9 + 1);
-                        newInput.desc += "-WAS:"+oldInt;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            int minVal = oldInt - nearbyDist;
-                            int maxVal = oldInt + nearbyDist;
-                            newInt = minVal + random.nextInt(maxVal - minVal);
-                        } else if(randForMutator < 0.18){
-                            newInt = -oldInt;
-                        } else if(randForMutator < 0.25){
-                            newInt = 0;
-                        } else {
-                            newInt = random.nextInt();
-                        }
-                        newInput.values.putInt(offset * 9 + 1, newInt);
-                        newInput.desc += "-NOW:"+oldInt;
+                        fuzzInt(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Double:
-                        //Pick one of the three mutators
-                        double newDouble;
-                        double oldDouble = newInput.values.getDouble(offset * 9 + 1);
-                        newInput.desc += "-WAS:"+oldDouble;
-                        if(randForMutator < 0.15){
-                            // Pick a nearby number, +/- 0.1
-                            double nearbyDist = 0.1;
-                            double minVal = Math.max(0, oldDouble - nearbyDist);
-                            double maxVal = Math.min(1, oldDouble + nearbyDist);
-                            newDouble = minVal + random.nextDouble() * (maxVal - minVal);
-                        } else if(randForMutator < 0.25){
-                            newDouble = 0;
-                        } else {
-                            newDouble = random.nextDouble();
-                        }
-                        newInput.values.putDouble(offset * 9 + 1, newDouble);
-                        newInput.desc += "-NOW:"+newDouble;
+                        fuzzDouble(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case String:
-                        int oldString= newInput.values.getInt(offset * 9 + 1);
-                        int newString;
-                        newInput.desc += "-WAS:"+oldString;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            int minVal = oldString - nearbyDist;
-                            int maxVal = oldString + nearbyDist;
-                            newString = minVal + random.nextInt(maxVal - minVal);
-                        } else if(randForMutator < 0.25){
-                            newString = 0;
-                        } else {
-                            newString = random.nextInt();
-                        }
-                        newInput.values.putInt(offset * 9 + 1, newString);
-                        newInput.desc += "-NOW:"+newString;
+                        fuzzString(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Boolean:
-                        newInput.desc += "-WAS:"+newInput.values.get(offset * 9 + 1);
-                        if(newInput.values.get(offset * 9 + 1) == 0){
-                            newInput.values.put(offset * 9 + 1, (byte) 1);
-                        } else {
-                            newInput.values.put(offset * 9 + 1, (byte) 0);
-                        }
-                        newInput.desc += "-NOW:"+newInput.values.get(offset * 9 + 1);
+                        fuzzBoolean(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Byte:
-                        byte oldByte = newInput.values.get(offset * 9 + 1);
-                        byte newByte;
-                        newInput.desc += "-WAS:"+oldByte;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            int minVal = oldByte - nearbyDist;
-                            int maxVal = oldByte + nearbyDist;
-                            newByte = (byte) (minVal + random.nextInt(maxVal - minVal));
-                        } else if(randForMutator < 0.25){
-                            newByte = 0;
-                        } else {
-                            newByte = (byte) random.nextInt();
-                        }
-                        newInput.values.put(offset * 9 + 1, newByte);
-                        newInput.desc += "-NOW:"+newByte;
+                        fuzzByte(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Char:
-                        char oldChar = newInput.values.getChar(offset * 9 + 1);
-                        char newChar;
-                        newInput.desc += "-WAS:"+oldChar;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            int minVal = oldChar - nearbyDist;
-                            int maxVal = oldChar + nearbyDist;
-                            newChar = (char) (minVal + random.nextInt(maxVal - minVal));
-                        } else if(randForMutator < 0.25){
-                            newChar = 0;
-                        } else {
-                            newChar = (char) random.nextInt();
-                        }
-                        newInput.values.putChar(offset * 9 + 1, newChar);
-                        newInput.desc += "-NOW:"+newChar;
+                        fuzzChar(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Float:
-                        float oldFloat = newInput.values.getFloat(offset * 9 + 1);
-                        float newFloat;
-                        newInput.desc += "-WAS:"+oldFloat;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 0.1
-                            float nearbyDist = 0.1f;
-                            float minVal = Math.max(0, oldFloat - nearbyDist);
-                            float maxVal = Math.min(1, oldFloat + nearbyDist);
-                            newFloat = minVal + random.nextFloat() * (maxVal - minVal);
-                        } else if(randForMutator < 0.25){
-                            newFloat = 0;
-                        } else {
-                            newFloat = random.nextFloat();
-                        }
-                        newInput.values.putFloat(offset * 9 + 1, newFloat);
-                        newInput.desc += "-NOW:"+newFloat;
+                        fuzzFloat(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Long:
-                        long oldLong = newInput.values.getLong(offset * 9 + 1);
-                        long newLong;
-                        newInput.desc += "-WAS:"+oldLong;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            long minVal = oldLong - nearbyDist;
-                            long maxVal = oldLong + nearbyDist;
-                            newLong = minVal + random.nextInt((int) (maxVal - minVal));
-                        } else if(randForMutator < 0.25){
-                            newLong = 0;
-                        } else {
-                            newLong = random.nextLong();
-                        }
-                        newInput.values.putLong(offset * 9 + 1, newLong);
-                        newInput.desc += "-NOW:"+newLong;
+                        fuzzLong(newInput, offset, random, setToZero, randForMutator);
                         break;
                     case Short:
-                        short oldShort = newInput.values.getShort(offset * 9 + 1);
-                        short newShort;
-                        newInput.desc += "-WAS:"+oldShort;
-                        if(randForMutator < 0.15){
-                            //Pick a nearby number, +/- 10
-                            int nearbyDist = 10;
-                            int minVal = oldShort - nearbyDist;
-                            int maxVal = oldShort + nearbyDist;
-                            newShort = (short) (minVal + random.nextInt(maxVal - minVal));
-                        } else if(randForMutator < 0.25){
-                            newShort = 0;
-                        } else {
-                            newShort = (short) random.nextInt();
-                        }
-                        newInput.values.putShort(offset * 9 + 1, newShort);
-                        newInput.desc += "-NOW:"+newShort;
+                        fuzzShort(newInput, offset, random, setToZero, randForMutator);
                         break;
                     default:
                         throw new UnsupportedOperationException();
@@ -1643,15 +1637,152 @@ public class ZestGuidance implements Guidance {
             return newInput;
         }
 
+        private static void fuzzDouble(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            //Pick one of the three mutators
+            double newDouble;
+            double oldDouble = newInput.values.getDouble(offset * 9 + 1);
+            if (setToZero) {
+                newDouble = 0;
+            } else if (randForMutator < 0.15) {
+                // Pick a nearby number, +/- 0.1
+                double nearbyDist = 0.1;
+                double minVal = Math.max(0, oldDouble - nearbyDist);
+                newDouble = minVal + random.nextDouble() * 0.1;
+            } else {
+                newDouble = random.nextDouble();
+            }
+            newInput.values.putDouble(offset * 9 + 1, newDouble);
+        }
+
+        private static void fuzzString(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            int oldString = newInput.values.getInt(offset * 9 + 1);
+            int newString;
+            if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int minVal = oldString - 10;
+                newString = minVal + random.nextInt(10);
+            } else if (randForMutator < 0.25) {
+                newString = 0;
+            } else {
+                newString = random.nextInt();
+            }
+            newInput.values.putInt(offset * 9 + 1, newString);
+            newInput.desc += "-NOW:" + newString;
+        }
+
+        private static void fuzzBoolean(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            if (newInput.values.get(offset * 9 + 1) == 0) {
+                newInput.values.put(offset * 9 + 1, (byte) 1);
+            } else {
+                newInput.values.put(offset * 9 + 1, (byte) 0);
+            }
+        }
+
+        private static void fuzzInt(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            int newInt;
+            int oldInt = newInput.values.getInt(offset * 9 + 1);
+            if (setToZero) {
+                newInt = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int nearbyDist = 10;
+                int minVal = oldInt - nearbyDist;
+                newInt = minVal + random.nextInt(nearbyDist);
+            } else if (randForMutator < 0.18) {
+                newInt = -oldInt;
+            } else {
+                newInt = random.nextInt();
+            }
+            newInput.values.putInt(offset * 9 + 1, newInt);
+        }
+
+        private static void fuzzByte(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            byte oldByte = newInput.values.get(offset * 9 + 1);
+            byte newByte;
+            if (setToZero) {
+                newByte = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int minVal = oldByte - 10;
+                newByte = (byte) (minVal + random.nextInt(10));
+            } else {
+                newByte = (byte) random.nextInt();
+            }
+            newInput.values.put(offset * 9 + 1, newByte);
+        }
+
+        private static void fuzzChar(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            char oldChar = newInput.values.getChar(offset * 9 + 1);
+            char newChar;
+            if (setToZero) {
+                newChar = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int minVal = oldChar - 10;
+                newChar = (char) (minVal + random.nextInt(10));
+            } else {
+                newChar = (char) random.nextInt();
+            }
+            newInput.values.putChar(offset * 9 + 1, newChar)
+        }
+
+        private static void fuzzFloat(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            float oldFloat = newInput.values.getFloat(offset * 9 + 1);
+            float newFloat;
+            if (setToZero) {
+                newFloat = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 0.1
+                float minVal = (float) Math.max(0, oldFloat - 0.1);
+                newFloat = minVal + random.nextFloat() * (0.1f);
+            } else {
+                newFloat = random.nextFloat();
+            }
+            newInput.values.putFloat(offset * 9 + 1, newFloat)
+        }
+
+        private static void fuzzLong(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            long oldLong = newInput.values.getLong(offset * 9 + 1);
+            long newLong;
+            if (setToZero) {
+                newLong = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int nearbyDist = 10;
+                long minVal = oldLong - nearbyDist;
+                long maxVal = oldLong + nearbyDist;
+                newLong = minVal + random.nextInt((int) (maxVal - minVal));
+            } else {
+                newLong = random.nextLong();
+            }
+            newInput.values.putLong(offset * 9 + 1, newLong);
+        }
+
+        private static void fuzzShort(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
+            short oldShort = newInput.values.getShort(offset * 9 + 1);
+            short newShort;
+            if (setToZero) {
+                newShort = 0;
+            } else if (randForMutator < 0.15) {
+                //Pick a nearby number, +/- 10
+                int minVal = oldShort - 10;
+                newShort = (short) (minVal + random.nextInt(10));
+            } else {
+                newShort = (short) random.nextInt();
+            }
+            newInput.values.putShort(offset * 9 + 1, newShort);
+            newInput.desc += "-NOW:" + newShort;
+        }
+
         @Override
         public Iterator<TypedGeneratedValue> iterator() {
             throw new UnsupportedOperationException("WIP");
         }
 
-        public void writeTo(DataOutputStream out) throws IOException{
+        public void writeTo(DataOutputStream out) throws IOException {
             this.values.rewind();
             out.writeInt(this.numValues);
-            for(int i = 0; i < this.numValues * 9; i++){
+            for (int i = 0; i < this.numValues * 9; i++) {
                 out.writeByte(values.get(i));
             }
             this.values.rewind();
@@ -1665,31 +1796,36 @@ public class ZestGuidance implements Guidance {
             return values;
         }
 
-        private void checkPositionDebug(){
-            if(values.position() % 9 != 0){
+        private void checkPositionDebug() {
+            if (values.position() % 9 != 0) {
                 throw new IllegalStateException("Marking misaligned position");
             }
         }
-        public int getInt(){
+
+        public int getInt() {
             int ret = values.getInt();
             values.position(values.position() + 4);
             checkPositionDebug();
             return ret;
         }
-        public long getLong(){
+
+        public long getLong() {
             long ret = values.getLong();
             checkPositionDebug();
             return ret;
         }
-        public boolean getBoolean(){
+
+        public boolean getBoolean() {
             boolean ret = values.get() == 1;
             values.position(values.position() + 7);
             checkPositionDebug();
             return ret;
         }
-        public void advance(){
+
+        public void advance() {
             numValues++;
         }
+
         public void addInt(int value) {
             values.put((byte) TypedGeneratedValue.Type.Integer.ordinal());
             values.putInt(value);
@@ -1761,7 +1897,7 @@ public class ZestGuidance implements Guidance {
 
         }
 
-        public void skipTo(int to){
+        public void skipTo(int to) {
             values.position(to);
             checkPositionDebug();
         }
@@ -1774,7 +1910,7 @@ public class ZestGuidance implements Guidance {
         public TypedGeneratedValue.Type nextType() {
             checkPositionDebug();
             int tmp = values.get();
-            if(tmp == 0){
+            if (tmp == 0) {
                 throw new GuidanceException("Invalid type at position " + values.position());
             }
             return TypedGeneratedValue.Type.values()[tmp];
@@ -1809,7 +1945,7 @@ public class ZestGuidance implements Guidance {
         }
 
         public double getDouble() {
-            double ret= values.getDouble();
+            double ret = values.getDouble();
             checkPositionDebug();
             return ret;
         }
@@ -1826,7 +1962,7 @@ public class ZestGuidance implements Guidance {
             this.in = new DataInputStream(new BufferedInputStream(new FileInputStream(seedFile)));
             this.desc = "seed";
             this.numValues = this.in.readInt();
-            for(int i = 0; i < this.numValues * 9; i++){
+            for (int i = 0; i < this.numValues * 9; i++) {
                 values.put(this.in.readByte());
             }
             values.rewind();
