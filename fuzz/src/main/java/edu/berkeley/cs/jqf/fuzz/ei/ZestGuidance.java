@@ -1723,7 +1723,7 @@ public class ZestGuidance implements Guidance {
             } else {
                 newChar = (char) random.nextInt();
             }
-            newInput.values.putChar(offset * 9 + 1, newChar)
+            newInput.values.putChar(offset * 9 + 1, newChar);
         }
 
         private static void fuzzFloat(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
@@ -1738,7 +1738,7 @@ public class ZestGuidance implements Guidance {
             } else {
                 newFloat = random.nextFloat();
             }
-            newInput.values.putFloat(offset * 9 + 1, newFloat)
+            newInput.values.putFloat(offset * 9 + 1, newFloat);
         }
 
         private static void fuzzLong(LinearInput newInput, int offset, Random random, boolean setToZero, double randForMutator) {
